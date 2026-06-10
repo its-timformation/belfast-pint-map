@@ -73,6 +73,33 @@ const NEW_BARS = [
     openingHours: "12:00-01:00",
     servesGuinness: false,
   },
+  {
+    name: "The Dark Horse",
+    type: "pub",
+    area: "Cathedral Quarter",
+    address: "43 Hill Street, Belfast BT1 2LB",
+    lat: 54.6003, lng: -5.9295,
+    openingHours: "12:00-01:00",
+    servesGuinness: true,
+  },
+  {
+    name: "Madden's Bar",
+    type: "pub",
+    area: "Cathedral Quarter",
+    address: "74 Berry Street, Belfast BT1 1FJ",
+    lat: 54.5998, lng: -5.9325,
+    openingHours: "11:30-01:00",
+    servesGuinness: true,
+  },
+  {
+    name: "The Rotterdam",
+    type: "bar",
+    area: "Cathedral Quarter",
+    address: "54 Pilot Street, Belfast BT1 3BA",
+    lat: 54.6011, lng: -5.9172,
+    openingHours: "16:00-01:00",
+    servesGuinness: true,
+  },
 
   /* ----------- CITY CENTRE ----------- */
   {
@@ -82,6 +109,15 @@ const NEW_BARS = [
     address: "46 Great Victoria Street, Belfast BT2 7BA",
     lat: 54.5956, lng: -5.9355,
     openingHours: "11:30-23:00",
+    servesGuinness: true,
+  },
+  {
+    name: "Robinson's Bar",
+    type: "pub",
+    area: "City Centre",
+    address: "38-40 Great Victoria Street, Belfast BT2 7BA",
+    lat: 54.5959, lng: -5.9358,
+    openingHours: "11:30-01:00",
     servesGuinness: true,
   },
   {
@@ -129,12 +165,48 @@ const NEW_BARS = [
     openingHours: "12:00-01:00",
     servesGuinness: true,
   },
+  {
+    name: "Bittles Bar",
+    type: "pub",
+    area: "City Centre",
+    address: "70 Upper Church Lane, Belfast BT1 4QL",
+    lat: 54.5982, lng: -5.9272,
+    openingHours: "11:30-23:00",
+    servesGuinness: true,
+  },
+  {
+    name: "The Northern Whig",
+    type: "bar",
+    area: "City Centre",
+    address: "2-10 Bridge Street, Belfast BT1 1LU",
+    lat: 54.5993, lng: -5.9267,
+    openingHours: "11:00-01:00",
+    servesGuinness: true,
+  },
+  {
+    name: "The Garrick Bar",
+    type: "pub",
+    area: "City Centre",
+    address: "29 Chichester Street, Belfast BT1 4JB",
+    lat: 54.5975, lng: -5.9288,
+    openingHours: "11:30-23:00",
+    servesGuinness: true,
+  },
+  {
+    name: "The Deer's Head",
+    type: "pub",
+    area: "City Centre",
+    address: "1 Lower Garfield Street, Belfast BT1 1FP",
+    lat: 54.6001, lng: -5.9319,
+    openingHours: "11:30-23:00",
+    servesGuinness: true,
+  },
 
-  /* ----------- BOTANIC / QUEEN'S QUARTER ----------- */
+  /* ----------- QUEEN'S QUARTER ----------- */
   {
     name: "Lavery's",
     type: "pub",
-    area: "Botanic / Queen's Quarter",
+    area: "Queen's Quarter",
     address: "12 Bradbury Place, Belfast BT7 1RS",
     lat: 54.5914, lng: -5.9337,
     openingHours: "11:30-02:00",
@@ -143,7 +215,7 @@ const NEW_BARS = [
   {
     name: "The Bot (Botanic Inn)",
     type: "pub",
-    area: "Botanic / Queen's Quarter",
+    area: "Queen's Quarter",
     address: "23-27 Malone Road, Belfast BT9 6RU",
     lat: 54.5833, lng: -5.9373,
     openingHours: "11:30-01:00",
@@ -152,10 +224,28 @@ const NEW_BARS = [
   {
     name: "Cutters Wharf",
     type: "bar",
-    area: "Botanic / Queen's Quarter",
+    area: "Queen's Quarter",
     address: "4 Lockview Road, Belfast BT9 5FJ",
     lat: 54.5808, lng: -5.9337,
     openingHours: "12:00-01:00",
+    servesGuinness: true,
+  },
+  {
+    name: "The Empire Music Hall",
+    type: "bar",
+    area: "Queen's Quarter",
+    address: "42 Botanic Avenue, Belfast BT7 1JQ",
+    lat: 54.5898, lng: -5.9330,
+    openingHours: "16:00-01:00",
+    servesGuinness: true,
+  },
+  {
+    name: "The Eglantine Inn",
+    type: "pub",
+    area: "Queen's Quarter",
+    address: "32 Malone Road, Belfast BT9 5BQ",
+    lat: 54.5848, lng: -5.9401,
+    openingHours: "11:30-01:00",
     servesGuinness: true,
   },
 
@@ -198,26 +288,38 @@ const NEW_BARS = [
     openingHours: "12:00-01:00",
     servesGuinness: true,
   },
+
+  /* ----------- EAST BELFAST ----------- */
+  {
+    name: "The Strand Bar",
+    type: "pub",
+    area: "East Belfast",
+    address: "12 Strandview Street, Belfast BT4 1NT",
+    lat: 54.5893, lng: -5.9082,
+    openingHours: "11:30-01:00",
+    servesGuinness: true,
+  },
 ] as const;
 
-/* small price spread per area — Cathedral Quarter and Lisburn Road skew slightly pricier */
+/* small price spread per area */
 function priceFor(basePriceGBP: number, area: string) {
   const tier: Record<string, number> = {
-    "Cathedral Quarter":        1.05,
-    "City Centre":              1.05,
-    "Botanic / Queen's Quarter": 1.00,
-    "Ormeau Road":              0.95,
-    "Lisburn Road":             1.05,
+    "Cathedral Quarter":  1.05,
+    "City Centre":        1.05,
+    "Queen's Quarter":    1.00,
+    "Ormeau Road":        0.95,
+    "Lisburn Road":       1.05,
+    "East Belfast":       0.92,
+    "Titanic Quarter":    1.08,
+    "North Belfast":      0.90,
+    "South Belfast":      1.00,
   };
   const k = tier[area] ?? 1.0;
-  // small random jitter so identical drinks don't all match
   const jitter = 0.88 + Math.random() * 0.24;
   return Math.round(basePriceGBP * k * jitter * 20) / 20; // round to nearest 5p
 }
 
 async function run() {
-  // Safety check — never wipe a database that already has bars in it.
-  // To force a reseed: yarn db:seed --force
   const existing = await db.select().from(bars);
   const forceReseed = process.argv.includes('--force');
 
@@ -243,9 +345,7 @@ async function run() {
   console.log("Seeding beer menu for every bar...");
   for (const bar of inserted) {
     const rows = STAPLE_DRINKS
-      // Don't seed Guinness on bars that don't serve it
       .filter(([name]) => name !== "Guinness" || bar.servesGuinness)
-      // Seed a random ~7 of the 10 staples per bar for realism
       .filter(() => Math.random() > 0.30)
       .map(([name, size, base]) => ({
         barId: bar.id,
@@ -269,21 +369,25 @@ async function run() {
       type: "happy_hour",
       startTime: "17:00",
       endTime: "19:00",
-      daysOfWeek: JSON.stringify([1,2,3,4,5]), // Mon–Fri
+      daysOfWeek: JSON.stringify([1,2,3,4,5]),
       isActive: true,
     });
   }
-  // Add a trad session event
-  const tradBar = inserted.find(b => b.name === "Kelly's Cellars");
-  if (tradBar) {
+
+  const tradBars = [
+    inserted.find(b => b.name === "Kelly's Cellars"),
+    inserted.find(b => b.name === "Madden's Bar"),
+  ].filter(Boolean);
+
+  for (const bar of tradBars) {
     await db.insert(deals).values({
-      barId: tradBar.id,
+      barId: bar!.id,
       title: "Trad Session",
       description: "Live traditional music session",
       type: "event",
       startTime: "21:00",
       endTime: "23:30",
-      daysOfWeek: JSON.stringify([4, 6]), // Thu & Sat
+      daysOfWeek: JSON.stringify([4, 6]),
       isActive: true,
     });
   }
