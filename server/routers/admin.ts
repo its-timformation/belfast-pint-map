@@ -54,8 +54,9 @@ async function callPlacesAPI(queries: string[], apiKey: string) {
           textQuery: query,
           locationBias: {
             circle: {
-              center: { latitude: 46.1893, longitude: 6.7741 },
-              radius: 50000.0,
+              // Belfast city centre
+              center: { latitude: 54.5973, longitude: -5.9301 },
+              radius: 15000.0, // 15km covers all of Greater Belfast
             },
           },
           maxResultCount: 1,
@@ -74,7 +75,8 @@ async function callPlacesAPI(queries: string[], apiKey: string) {
 
       const lat = place.location?.latitude;
       const lng = place.location?.longitude;
-      if (!lat || !lng || lat < 43 || lat > 48 || lng < 4 || lng > 12) continue;
+      // Reject results outside Northern Ireland / Ireland bounding box
+      if (!lat || !lng || lat < 53.5 || lat > 55.5 || lng < -7.5 || lng > -4.5) continue;
 
       let openingHours: string | null = null;
       const periods = place.regularOpeningHours?.periods;
@@ -122,14 +124,13 @@ export const adminRouter = router({
         if (apiKey && placeName) {
           const nameVariants = [
             placeName,
-            placeName.replace(/^(Le|La|Les|L')\s+/i, ''),
             placeName.replace(/\s*[-,–].*$/, '').trim(),
           ].filter((v, i, arr) => v && arr.indexOf(v) === i);
 
           const queries = [
-            ...nameVariants.map(n => `${n} Avoriaz bar`),
-            ...nameVariants.map(n => `${n} French Alps bar`),
-            ...nameVariants.map(n => `${n} bar`),
+            ...nameVariants.map(n => `${n} Belfast pub`),
+            ...nameVariants.map(n => `${n} Belfast bar`),
+            ...nameVariants.map(n => `${n} Belfast`),
           ];
 
           const placeData = await callPlacesAPI(queries, apiKey);
@@ -192,20 +193,19 @@ export const adminRouter = router({
 
       const bar = (await db.select().from(bars).where(eq(bars.id, input.barId)))[0];
       if (!bar) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bar not found' });
-      if (!bar.googleMapsUrl) {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No Google Maps link saved for this bar' });
-      }
 
-      const finalUrl = await followRedirect(bar.googleMapsUrl);
-      const placeName = extractPlaceNameFromUrl(finalUrl) || bar.name;
-      const nameVariants = [
-        placeName,
-        placeName.replace(/^(Le|La|Les|L')\s+/i, ''),
-      ].filter((v, i, arr) => v && arr.indexOf(v) === i);
+      // Build search queries from name + area, with or without a saved Maps URL
+      const placeName = bar.googleMapsUrl
+        ? (extractPlaceNameFromUrl(await followRedirect(bar.googleMapsUrl)) || bar.name)
+        : bar.name;
+
       const queries = [
-        ...nameVariants.map(n => `${n} ${bar.area} bar`),
-        ...nameVariants.map(n => `${n} bar`),
+        `${placeName} ${bar.area} Belfast`,
+        `${placeName} Belfast pub`,
+        `${placeName} Belfast bar`,
+        `${placeName} Belfast`,
       ];
+
       const placeData = await callPlacesAPI(queries, apiKey);
       if (!placeData) {
         throw new TRPCError({ code: 'NOT_FOUND', message: `Could not refresh "${bar.name}"` });
@@ -220,6 +220,7 @@ export const adminRouter = router({
       if (placeData.phoneNumber) updates.phoneNumber = placeData.phoneNumber;
       if (placeData.openingHours) updates.openingHours = placeData.openingHours;
       if (placeData.rating != null) updates.rating = placeData.rating;
+      if (placeData.googleMapsUrl) updates.googleMapsUrl = placeData.googleMapsUrl;
 
       await db.update(bars).set(updates).where(eq(bars.id, input.barId));
       return { ...updates, name: bar.name, placeName: placeData.fullName };
@@ -231,20 +232,22 @@ export const adminRouter = router({
       if (!apiKey) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No API key' });
 
       const allBars = await db.select().from(bars);
-      const withLinks = allBars.filter(b => b.googleMapsUrl);
-
+      // Process every bar — search by name + area when no Maps URL is saved
       const results = { updated: 0, failed: 0, tempClosed: 0, details: [] as any[] };
 
-      for (const bar of withLinks) {
+      for (const bar of allBars) {
         try {
-          const finalUrl = await followRedirect(bar.googleMapsUrl!);
-          const placeName = extractPlaceNameFromUrl(finalUrl) || bar.name;
-          const nameVariants = [placeName, placeName.replace(/^(Le|La|Les|L')\s+/i, '')]
-            .filter((v, i, arr) => v && arr.indexOf(v) === i);
+          const placeName = bar.googleMapsUrl
+            ? (extractPlaceNameFromUrl(await followRedirect(bar.googleMapsUrl)) || bar.name)
+            : bar.name;
+
           const queries = [
-            ...nameVariants.map(n => `${n} ${bar.area} bar`),
-            ...nameVariants.map(n => `${n} bar`),
+            `${placeName} ${bar.area} Belfast`,
+            `${placeName} Belfast pub`,
+            `${placeName} Belfast bar`,
+            `${placeName} Belfast`,
           ];
+
           const placeData = await callPlacesAPI(queries, apiKey);
 
           if (placeData) {
@@ -257,6 +260,7 @@ export const adminRouter = router({
             if (placeData.phoneNumber) updates.phoneNumber = placeData.phoneNumber;
             if (placeData.openingHours) updates.openingHours = placeData.openingHours;
             if (placeData.rating != null) updates.rating = placeData.rating;
+            if (placeData.googleMapsUrl) updates.googleMapsUrl = placeData.googleMapsUrl;
 
             await db.update(bars).set(updates).where(eq(bars.id, bar.id));
             results.updated++;
@@ -354,9 +358,7 @@ export const adminRouter = router({
         const verifiedAt = isVerified ? new Date().toISOString() : null;
 
         if (sub.kind === "update") {
-          // Try to find existing drink to update in place
-          const existing = await db.select().from(drinks)
-            .where(eq(drinks.barId, sub.barId));
+          const existing = await db.select().from(drinks).where(eq(drinks.barId, sub.barId));
           const match = existing.find(d => d.name.toLowerCase() === sub.drinkName.toLowerCase());
           if (match) {
             await db.update(drinks).set({
@@ -368,7 +370,6 @@ export const adminRouter = router({
               lastUpdated: new Date().toISOString(),
             }).where(eq(drinks.id, match.id));
           } else {
-            // Update submission for a drink that no longer exists — insert as new
             await db.insert(drinks).values({
               barId: sub.barId,
               name: sub.drinkName,
@@ -509,7 +510,6 @@ export const adminRouter = router({
       }).where(eq(drinks.id, id)).returning();
     }),
 
-  // Ad-hoc verify/unverify toggle from the Drinks Catalogue
   setDrinkVerification: publicProcedure
     .input(z.object({ id: z.number(), isVerified: z.boolean() }))
     .mutation(async ({ input }) => {
@@ -547,7 +547,6 @@ export const adminRouter = router({
       return db.update(deals).set({ isActive: input.isActive }).where(eq(deals.id, input.id)).returning();
     }),
 
-  // Editor's Pick config
   getEditorsPick: publicProcedure.query(async () => {
     const [row] = await db.select().from(editorsPick).limit(1);
     return row ?? { id: null, mode: "cheapest", barId: null, lastRandomBarId: null, lastRandomDate: null };
@@ -569,7 +568,6 @@ export const adminRouter = router({
       return db.insert(editorsPick).values({ mode: input.mode, barId: input.barId ?? null }).returning();
     }),
 
-  // Reports
   resolveReport: publicProcedure
     .input(z.object({ id: z.number(), status: z.enum(["resolved", "dismissed", "bar_contacted"]) }))
     .mutation(async ({ input }) => {
