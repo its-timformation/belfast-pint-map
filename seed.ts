@@ -224,7 +224,7 @@ const NEW_BARS = [
   {
     name: "Cutters Wharf",
     type: "bar",
-    area: "Queen's Quarter",
+    area: "Stranmillis",
     address: "4 Lockview Road, Belfast BT9 5FJ",
     lat: 54.5808, lng: -5.9337,
     openingHours: "12:00-01:00",
@@ -310,6 +310,7 @@ function priceFor(basePriceGBP: number, area: string) {
     "Ormeau Road":        0.95,
     "Lisburn Road":       1.05,
     "East Belfast":       0.92,
+    "Stranmillis":        1.00,
     "Titanic Quarter":    1.08,
     "North Belfast":      0.90,
     "South Belfast":      1.00,
