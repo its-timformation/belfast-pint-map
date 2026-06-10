@@ -13,7 +13,7 @@ import SubmitPrice from "./pages/SubmitPrice";
 import Admin from "./pages/Admin";
 import LiveNow from "./pages/LiveNow";
 
-const ADMIN_SESSION_KEY = "pds-admin-session";
+const ADMIN_SESSION_KEY = "bpm-admin-session";
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 min admin session
 
 function hasAdminSession(): boolean {
@@ -49,7 +49,7 @@ function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdmin
   return (
     <div data-shell="ticker" className="bg-[var(--color-ink)] text-[var(--color-paper)] hairline-b">
       <div className="max-w-md mx-auto px-4 py-2 flex items-center justify-between text-eyebrow opacity-70">
-        <span>PORTES DU SOLEIL</span>
+        <span>BELFAST</span>
         <span>{dateStr}</span>
         {/* The VOL.01 tap target — invisible admin entry */}
         <button
@@ -73,9 +73,9 @@ function Header({ onWordmarkTap }: { onWordmarkTap: () => void; }) {
   return (
     <header data-shell="header" className="bg-[var(--color-ink)] hairline-b">
       <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
-        <button onClick={() => { onWordmarkTap(); navigate("/"); }} className="group" aria-label="Pints du Soleil home">
+        <button onClick={() => { onWordmarkTap(); navigate("/"); }} className="group" aria-label="Belfast Pint Map home">
           <span className="font-display text-xl uppercase leading-none text-[var(--color-paper)] tracking-wide">
-            {stoutsMode ? "STOUTS" : "PINTS"}<span className="text-[var(--color-blaze)]">·</span>DU<span className="text-[var(--color-blaze)]">·</span>SOLEIL
+            {stoutsMode ? "STOUTS" : "BELFAST"}<span className="text-[var(--color-blaze)]">·</span>PINT<span className="text-[var(--color-blaze)]">·</span>MAP
           </span>
         </button>
         <div className="flex items-center gap-1">
@@ -187,7 +187,7 @@ function Shell() {
 
   const onUnlock = (token: string) => {
     setAdminSession();
-    try { sessionStorage.setItem("pds-admin-token", token); } catch {}
+    try { sessionStorage.setItem("bpm-admin-token", token); } catch {}
     setAdminActive(true);
     setShowSentry(false);
     navigate("/admin");
@@ -195,7 +195,7 @@ function Shell() {
 
   const onExitAdmin = () => {
     clearAdminSession();
-    try { sessionStorage.removeItem("pds-admin-token"); } catch {}
+    try { sessionStorage.removeItem("bpm-admin-token"); } catch {}
     setAdminActive(false);
     navigate("/");
   };

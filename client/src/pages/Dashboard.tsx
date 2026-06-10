@@ -19,18 +19,19 @@ export default function Dashboard() {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
       p => setUserLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {}, // silently fall back to Avoriaz centroid
+      () => {}, // silently fall back to Belfast city centre
       { maximumAge: 5*60*1000, timeout: 5000 }
     );
   }, []);
 
-  const center = userLocation || { lat: 46.1893, lng: 6.7741 };
+  // Default centre: Belfast city centre
+  const center = userLocation || { lat: 54.5973, lng: -5.9301 };
 
   const enriched = useMemo(() => {
     if (!barsWithDetails) return [];
     return barsWithDetails.map(b => {
       const beerDrinks = (b.drinks ?? []).filter(d =>
-        /lager|beer|pint|kronen|stella|heineken|guinness|ipa|carlsberg|1664|mutzig/i.test(d.name)
+        /lager|beer|pint|guinness|ipa|stella|heineken|carlsberg|harp|tennent|smithwick|bass|caffreys|magners|strongbow|bulmers|murphy|kilkenny/i.test(d.name)
       );
       const cheapest = beerDrinks.length
         ? beerDrinks.reduce((min, d) => {
@@ -85,8 +86,8 @@ export default function Dashboard() {
   }, [deals]);
 
   const localArea = userLocation
-    ? (enriched[0]?.area || "Portes du Soleil")
-    : "Avoriaz";
+    ? (enriched[0]?.area || "Belfast")
+    : "Belfast";
 
   if (isLoading) {
     return <LoadingMessage surface="dashboard" />;
@@ -99,18 +100,12 @@ export default function Dashboard() {
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DISPATCH 01 · {localArea.toUpperCase()}</div>
         <h1 className="text-hero text-[var(--color-paper)]">
           FIND THE<br/>
-          {stoutsMode ? <>BEST <span style={{color:"var(--color-paper)"}}>STOUT</span> ON</> : <>CHEAPEST<br/><span className="text-[var(--color-blaze)]">PINT</span> ON</>}<br/>
-          THE MOUNTAIN
+          {stoutsMode ? <>BEST <span style={{color:"var(--color-paper)"}}>STOUT</span> IN</> : <>CHEAPEST<br/><span className="text-[var(--color-blaze)]">PINT</span> IN</>}<br/>
+          BELFAST
         </h1>
 
-        {/* Status bar — lifts, temp, bars */}
+        {/* Status bar — temp, bars */}
         <div className="mt-5 flex gap-2">
-          <div className="flex-1 border border-[var(--color-rule)] px-2.5 py-2">
-            <div className="text-eyebrow opacity-60">LIFTS</div>
-            <div className={`font-display text-xl mt-0.5 ${resort?.lifts?.open ? "text-[var(--color-verified)]" : "text-[var(--color-stale)]"}`}>
-              {resort ? `${resort.lifts.open}/${resort.lifts.total}` : "—"}
-            </div>
-          </div>
           <div className="flex-1 border border-[var(--color-rule)] px-2.5 py-2">
             <div className="text-eyebrow opacity-60">TEMP</div>
             <div className="font-display text-xl mt-0.5 text-[var(--color-frost)]">
@@ -185,7 +180,7 @@ export default function Dashboard() {
       <section className="px-4 pb-3">
         <div className="hairline-b flex items-baseline justify-between pb-1.5 mb-1">
           <div className="font-display text-lg uppercase">NEAREST YOU</div>
-          <div className="text-meta opacity-55">{userLocation ? "GPS" : "AVORIAZ"}</div>
+          <div className="text-meta opacity-55">{userLocation ? "GPS" : "BELFAST"}</div>
         </div>
         {nearest.length === 0 ? (
           <div className="py-8 text-center text-meta opacity-55">No bars found nearby yet.</div>

@@ -5,10 +5,13 @@ const DRAFT_PATTERNS = [
   /draught|draft|pression|\bpint\b/i,
   /kronenbourg|1664|heineken|carlsberg|stella|leffe|hoegaarden|murphy/i,
   /guinness|kilkenny|mahou|tiger|san miguel/i,
+  // Northern Irish & UK draught names
+  /tennent|harp\b|smithwick|bass\b|caffreys|magners|strongbow|bulmers/i,
 ];
 const BOTTLED_PATTERNS = [
   /\bbottle\b|bouteille|corona|peroni|desperados|brooklyn/i,
   /ipa|pale ale|lager|bière artisanale|blonde du/i,
+  /magners bottle/i,
 ];
 const CANNED_PATTERNS = [/\bcan\b|\bcanned\b/i];
 const WINE_PATTERNS = [
@@ -25,10 +28,11 @@ const COCKTAIL_PATTERNS = [
 const SHOT_PATTERNS = [
   /shot|shooter|jager|jäger|sambuca|tequila\b|genepi|génépi/i,
   /baby guinness|bomb|jagerbomb|b52/i,
-  /shooters d'alcool|ski de shooter/i,
+  /shooters d'alcool/i,
 ];
 const SPIRIT_PATTERNS = [
   /whisky|whiskey|bourbon|scotch|jameson|jack daniel|glenfiddich/i,
+  /\bbushmills\b|\bpowers\b|\bjameson\b|\bredbreast\b/i,
   /gin\b|vodka\b|rum\b|bacardi|smirnoff|absolut|tanqueray|hendricks/i,
   /cognac|brandy|armagnac|calvados|marc\b|eau de vie/i,
   /ricard|pastis|pernod|suze|campari|martini\b/i,
@@ -68,8 +72,8 @@ export function parseSizeValue(size: string | null): number {
   const lMatch = size.match(/^(\d+(?:\.\d+)?)\s*L$/i);
   if (lMatch) return parseFloat(lMatch[1]) * 100;
   const named: Record<string, number> = {
-    'pint': 56.8, 'half': 28.4, 'glass': 20, 'bottle': 33,
-    'can': 33, 'cup': 15, 'mug': 25, 'jug': 200, 'pichet': 200,
+    'pint': 56.8, 'half': 28.4, 'third': 18.9, 'glass': 20, 'bottle': 33,
+    'can': 33, 'shot': 2.5, 'cup': 15, 'mug': 25, 'jug': 200, 'pichet': 200,
   };
   const lower = size.toLowerCase();
   if (lower in named) return named[lower];
