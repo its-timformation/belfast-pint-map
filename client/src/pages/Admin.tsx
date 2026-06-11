@@ -70,7 +70,10 @@ export default function Admin({ onExit }: Props) {
   return (
     <div className="grain-ink pb-6 max-w-md mx-auto">
       <section className="px-4 pt-5 pb-4">
-        <div className="text-eyebrow text-[var(--color-blaze)] mb-3">CONTROL ROOM · ADMIN</div>
+        <div className="flex items-baseline justify-between mb-3">
+          <div className="text-eyebrow text-[var(--color-blaze)]">CONTROL ROOM · ADMIN</div>
+          <div className="text-eyebrow opacity-40">v{APP_VERSION} · {VERSION_DATE}</div>
+        </div>
         <h1 className="text-headline">WELCOME<br/>BACK</h1>
       </section>
 
