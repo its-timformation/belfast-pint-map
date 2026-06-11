@@ -7,6 +7,8 @@ const DRAFT_PATTERNS = [
   /guinness|kilkenny|mahou|tiger|san miguel/i,
   // Northern Irish & UK draught names
   /tennent|harp\b|smithwick|bass\b|caffreys|magners|strongbow|bulmers/i,
+  // NI / Irish craft breweries
+  /whitewater|boundary brewing|hilden|bullhouse|farmageddon|lacada|knockout brewing/i,
 ];
 const BOTTLED_PATTERNS = [
   /\bbottle\b|bouteille|corona|peroni|desperados|brooklyn/i,
@@ -32,13 +34,49 @@ const SHOT_PATTERNS = [
 ];
 const SPIRIT_PATTERNS = [
   /whisky|whiskey|bourbon|scotch|jameson|jack daniel|glenfiddich/i,
-  /\bbushmills\b|\bpowers\b|\bjameson\b|\bredbreast\b/i,
+  /\bbushmills\b|\bpowers\b|\bredbreast\b/i,
   /gin\b|vodka\b|rum\b|bacardi|smirnoff|absolut|tanqueray|hendricks/i,
   /cognac|brandy|armagnac|calvados|marc\b|eau de vie/i,
   /ricard|pastis|pernod|suze|campari|martini\b/i,
 ];
 const VIN_CHAUD_PATTERNS = [/vin chaud|mulled wine|glühwein|grog|jägertee|hot wine/i];
 const PICON_PATTERNS = [/picon|bière sirop|bierre sirop/i];
+
+/**
+ * Craft beer detection — style names + NI/Belfast brewery names.
+ * Does not change the DrinkType enum; use alongside detectDrinkType().
+ * A craft beer is still typed as draft_beer/bottled_beer/canned_beer.
+ */
+const CRAFT_STYLE_PATTERNS = [
+  // IPA family
+  /\bipa\b|\bdipa\b|\bneipa\b|\bwcipa\b/i,
+  /session ipa|west coast ipa|east coast ipa|hazy ipa|juicy ipa/i,
+  // Pale ales
+  /\bpale ale\b|\bapa\b|\bxpa\b/i,
+  // Stouts & porters (non-macro)
+  /\bporter\b|milk stout|oatmeal stout|imperial stout|baltic porter/i,
+  /dry stout|export stout|cream stout/i,
+  // Sours & wild
+  /\bgose\b|\bsour\b|berliner weisse|kettle sour|lambic|gueuze/i,
+  // Wheat & Belgian
+  /\bwitbier\b|\bhefeweizen\b|wheat beer|\bsaison\b|belgian/i,
+  // Amber & red ales
+  /amber ale|red ale|irish red|\bcream ale\b/i,
+  // Session
+  /session ale|session beer/i,
+  // Craft lager
+  /craft lager|craft pilsner|unfiltered lager/i,
+  // Named Belfast / NI craft breweries
+  /\bwhitewater\b|belfast ale|maggie'?s leap|clotworthy dobbin/i,
+  /\bboundary\b|\bhilden\b|\bbullhouse\b|\bfarmageddon\b/i,
+  /\blacada\b|knockout brew/i,
+  // Generic craft markers
+  /small batch|local brew|rotating tap|tap room special|craft beer/i,
+];
+
+export function isCraftBeer(name: string): boolean {
+  return CRAFT_STYLE_PATTERNS.some(p => p.test(name));
+}
 
 export function detectDrinkType(name: string): DrinkType {
   if (VIN_CHAUD_PATTERNS.some(p => p.test(name))) return 'vin_chaud';

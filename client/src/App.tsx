@@ -12,9 +12,10 @@ import BarDetail from "./pages/BarDetail";
 import SubmitPrice from "./pages/SubmitPrice";
 import Admin from "./pages/Admin";
 import LiveNow from "./pages/LiveNow";
+import CrawlPage from "./pages/CrawlPage";
 
 const ADMIN_SESSION_KEY = "bpm-admin-session";
-const SESSION_TTL_MS = 30 * 60 * 1000; // 30 min admin session
+const SESSION_TTL_MS = 30 * 60 * 1000;
 
 function hasAdminSession(): boolean {
   try {
@@ -30,8 +31,8 @@ function clearAdminSession() {
   try { sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch {}
 }
 
-/* ---------------------- TICKER BAND (with hidden admin entry) ---------------------- */
-function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdminTap: () => void; }) {
+/* ── Ticker ────────────────────────────────────────────────── */
+function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdminTap: () => void }) {
   const location = useLocation();
   const today = new Date();
   const dateStr = `${today.getDate().toString().padStart(2,'0')}.${(today.getMonth()+1).toString().padStart(2,'0')}.${today.getFullYear().toString().slice(-2)}`;
@@ -39,11 +40,13 @@ function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdmin
     '/': 'DISPATCH 01',
     '/map': 'DISPATCH 02',
     '/list': 'DISPATCH 03',
+    '/crawl': 'DISPATCH 04',
   };
   let pageLabel = pageMap[location.pathname] || '';
   if (!pageLabel) {
     if (location.pathname.startsWith('/bar/')) pageLabel = 'DISPATCH 04';
     else if (location.pathname.startsWith('/submit/')) pageLabel = 'DISPATCH 05';
+    else if (location.pathname.startsWith('/crawl')) pageLabel = 'DISPATCH 04';
     else if (location.pathname.startsWith('/admin')) pageLabel = 'ADMIN';
   }
   return (
@@ -51,7 +54,6 @@ function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdmin
       <div className="max-w-md mx-auto px-4 py-2 flex items-center justify-between text-eyebrow opacity-70">
         <span>BELFAST</span>
         <span>{dateStr}</span>
-        {/* The VOL.01 tap target — invisible admin entry */}
         <button
           onClick={onAdminTap}
           className="!min-h-0 px-1 -mx-1 hover:opacity-100 transition-opacity"
@@ -66,8 +68,8 @@ function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdmin
   );
 }
 
-/* ---------------------- HEADER ---------------------- */
-function Header({ onWordmarkTap }: { onWordmarkTap: () => void; }) {
+/* ── Header ────────────────────────────────────────────────── */
+function Header({ onWordmarkTap }: { onWordmarkTap: () => void }) {
   const { currency, setCurrency, stoutsMode } = useAppStore();
   const navigate = useNavigate();
   return (
@@ -95,7 +97,7 @@ function Header({ onWordmarkTap }: { onWordmarkTap: () => void; }) {
   );
 }
 
-/* ---------------------- BOTTOM NAV ---------------------- */
+/* ── Bottom Nav ─────────────────────────────────────────────── */
 function BottomNav() {
   const location = useLocation();
   const items = [
@@ -116,11 +118,20 @@ function BottomNav() {
         <line x1="4" y1="18" x2="20" y2="18" />
       </svg>
     )},
+    { to: "/crawl", label: "CRAWL", icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="5" cy="6" r="2" />
+        <circle cx="12" cy="6" r="2" />
+        <circle cx="19" cy="6" r="2" />
+        <path d="M5 8 v4 l7 3 7-3 V8" />
+        <path d="M12 11 v7" />
+      </svg>
+    )},
   ];
 
   return (
     <nav data-shell="nav" className="bg-[var(--color-ink)] hairline-t pb-safe">
-      <div className="max-w-md mx-auto grid grid-cols-3">
+      <div className="max-w-md mx-auto grid grid-cols-4">
         {items.map(item => {
           const active = item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
           return (
@@ -141,7 +152,7 @@ function BottomNav() {
   );
 }
 
-/* ---------------------- SHELL ---------------------- */
+/* ── Shell ──────────────────────────────────────────────────── */
 function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -149,17 +160,12 @@ function Shell() {
 
   const [showSentry, setShowSentry] = useState(false);
   const [adminActive, setAdminActive] = useState(() => hasAdminSession());
-
-  // 7-tap easter egg detection — 10 second window
   const [tapCount, setTapCount] = useState(0);
   const [tapWindowStart, setTapWindowStart] = useState(0);
+
   const onWordmarkTap = () => {
     const now = Date.now();
-    if (now - tapWindowStart > 10_000) {
-      setTapCount(1);
-      setTapWindowStart(now);
-      return;
-    }
+    if (now - tapWindowStart > 10_000) { setTapCount(1); setTapWindowStart(now); return; }
     const next = tapCount + 1;
     setTapCount(next);
     if (next >= 7) {
@@ -168,7 +174,6 @@ function Shell() {
     }
   };
 
-  // Auto-expire stouts mode
   useEffect(() => {
     if (!stoutsMode || !stoutsExpires) return;
     const remaining = stoutsExpires - Date.now();
@@ -178,11 +183,8 @@ function Shell() {
   }, [stoutsMode, stoutsExpires, exitStoutsMode]);
 
   const onAdminTap = () => {
-    if (adminActive) {
-      navigate("/admin");
-    } else {
-      setShowSentry(true);
-    }
+    if (adminActive) navigate("/admin");
+    else setShowSentry(true);
   };
 
   const onUnlock = (token: string) => {
@@ -241,6 +243,9 @@ function Shell() {
           <Route path="/submit/:id" element={<SubmitPrice />} />
           <Route path="/admin" element={<Admin onExit={onExitAdmin} />} />
           <Route path="/live" element={<LiveNow />} />
+          <Route path="/crawl" element={<CrawlPage />} />
+          <Route path="/crawl/c/:code" element={<CrawlPage />} />
+          <Route path="/crawl/join/:code" element={<CrawlPage />} />
         </Routes>
       </main>
 

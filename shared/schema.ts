@@ -4,16 +4,16 @@ import { sql } from "drizzle-orm";
 export const bars = sqliteTable("bars", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  type: text("type").notNull(), // bar, restaurant-bar, slope-side, club, pub
+  type: text("type").notNull(), // bar, restaurant-bar, club, pub, brewery, taproom
   address: text("address"),
   lat: real("lat").notNull(),
   lng: real("lng").notNull(),
-  area: text("area"), // e.g. "Avoriaz", "Morzine", "Les Gets"
+  area: text("area"),
   imageUrl: text("image_url"),
-  openingHours: text("opening_hours"), // simple string "HH:MM-HH:MM" or JSON
+  openingHours: text("opening_hours"),
   servesGuinness: integer("serves_guinness", { mode: "boolean" }).default(false).notNull(),
   googleMapsUrl: text("google_maps_url"),
-  businessStatus: text("business_status"), // OPERATIONAL | CLOSED_TEMPORARILY | CLOSED_PERMANENTLY
+  businessStatus: text("business_status"),
   websiteUrl: text("website_url"),
   phoneNumber: text("phone_number"),
   rating: real("rating"),
@@ -24,12 +24,12 @@ export const drinks = sqliteTable("drinks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   barId: integer("bar_id").references(() => bars.id).notNull(),
   name: text("name").notNull(),
-  size: text("size"), // "Pint", "50cl", "25cl", "Shot"
+  size: text("size"),
   price: real("price").notNull(),
   currency: text("currency").default("EUR").notNull(),
-  drinkType: text("drink_type"), // draft_beer | bottled_beer | canned_beer | wine | cocktail | shot | spirit | vin_chaud | other
+  drinkType: text("drink_type"),
   isVerified: integer("is_verified", { mode: "boolean" }).default(false).notNull(),
-  verifiedAt: text("verified_at"), // ISO; used to age verification after 60 days
+  verifiedAt: text("verified_at"),
   lastUpdated: text("last_updated").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -40,12 +40,12 @@ export const submissions = sqliteTable("submissions", {
   drinkSize: text("drink_size"),
   price: real("price").notNull(),
   currency: text("currency").default("EUR").notNull(),
-  imageUrl: text("image_url"), // optional photo proof (receipt or menu)
-  submitterName: text("submitter_name"), // optional display name
-  kind: text("kind").default("new").notNull(), // "new" | "update"
-  previousPrice: real("previous_price"), // populated for update submissions
-  status: text("status").default("pending").notNull(), // pending, approved, rejected
-  aiVerification: text("ai_verification"), // JSON result from Claude vision
+  imageUrl: text("image_url"),
+  submitterName: text("submitter_name"),
+  kind: text("kind").default("new").notNull(),
+  previousPrice: real("previous_price"),
+  status: text("status").default("pending").notNull(),
+  aiVerification: text("ai_verification"),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -54,42 +54,39 @@ export const deals = sqliteTable("deals", {
   barId: integer("bar_id").references(() => bars.id).notNull(),
   title: text("title").notNull(),
   description: text("description"),
-  type: text("type").notNull(), // 'happy_hour', 'promotion', 'event'
-  startTime: text("start_time"), // HH:mm
-  endTime: text("end_time"), // HH:mm
-  daysOfWeek: text("days_of_week"), // JSON array
+  type: text("type").notNull(),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  daysOfWeek: text("days_of_week"),
   isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
 });
 
-// Bar reports — anyone can flag a bar (closed, wrong info, drink not served)
 export const barReports = sqliteTable("bar_reports", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   barId: integer("bar_id").references(() => bars.id).notNull(),
-  reason: text("reason").notNull(), // 'closed', 'wrong_info', 'drink_not_served', 'other'
+  reason: text("reason").notNull(),
   detail: text("detail"),
   reporterName: text("reporter_name"),
-  status: text("status").default("open").notNull(), // open, resolved, dismissed
+  status: text("status").default("open").notNull(),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// Admin-configurable editor's pick — single-row config
 export const editorsPick = sqliteTable("editors_pick", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  mode: text("mode").default("cheapest").notNull(), // cheapest | manual | daily_random | weekly_random
+  mode: text("mode").default("cheapest").notNull(),
   barId: integer("bar_id").references(() => bars.id),
   lastRandomBarId: integer("last_random_bar_id"),
   lastRandomDate: text("last_random_date"),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// Anonymous PWA push subscriptions — no auth required
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   endpoint: text("endpoint").notNull().unique(),
   p256dh: text("p256dh").notNull(),
   authKey: text("auth_key").notNull(),
-  favouriteBarIds: text("favourite_bar_ids"), // JSON array of bar IDs the user has favourited
-  topics: text("topics"), // JSON array: 'happy_hours', 'promos', 'events'
+  favouriteBarIds: text("favourite_bar_ids"),
+  topics: text("topics"),
   createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -108,27 +105,41 @@ export const barSuggestions = sqliteTable("bar_suggestions", {
   status: text("status").default("pending"),
 });
 
-// Infer types
+export const pubCrawls = sqliteTable("pub_crawls", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  barIds: text("bar_ids").notNull(),             // JSON array of bar IDs in order
+  status: text("status").notNull().default("private"), // private | submitted | published
+  shareCode: text("share_code").notNull(),        // 6-char public read code
+  groupCode: text("group_code"),                  // 6-char group join code (set when group starts)
+  activeStopIndex: integer("active_stop_index").default(0),
+  participantCount: integer("participant_count").default(1),
+  isGroupActive: integer("is_group_active", { mode: "boolean" }).default(false),
+  authorName: text("author_name"),
+  tags: text("tags"),                             // JSON array of strings
+  generatedBy: text("generated_by").default("manual"), // manual | auto
+  autoParams: text("auto_params"),                // JSON — preset + area used
+  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  lastActiveAt: text("last_active_at"),
+});
+
+// Types
 export type Bar = typeof bars.$inferSelect;
 export type InsertBar = typeof bars.$inferInsert;
-
 export type Drink = typeof drinks.$inferSelect;
 export type InsertDrink = typeof drinks.$inferInsert;
-
 export type Submission = typeof submissions.$inferSelect;
 export type InsertSubmission = typeof submissions.$inferInsert;
-
 export type Deal = typeof deals.$inferSelect;
 export type InsertDeal = typeof deals.$inferInsert;
-
 export type BarReport = typeof barReports.$inferSelect;
 export type InsertBarReport = typeof barReports.$inferInsert;
-
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
-
 export type EditorsPick = typeof editorsPick.$inferSelect;
 export type InsertEditorsPick = typeof editorsPick.$inferInsert;
-
 export type BarSuggestion = typeof barSuggestions.$inferSelect;
 export type InsertBarSuggestion = typeof barSuggestions.$inferInsert;
+export type PubCrawl = typeof pubCrawls.$inferSelect;
+export type InsertPubCrawl = typeof pubCrawls.$inferInsert;
