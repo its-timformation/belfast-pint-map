@@ -119,7 +119,7 @@ export default function ListPage() {
     <div className="grain-ink max-w-md mx-auto">
       <section className="px-4 pt-5 pb-3">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DIRECTORY · {(barsWithDetails?.length ?? 0).toString().padStart(2,"0")} BARS</div>
-        <h1 className="text-headline">EVERY BAR<br/>ON THE<br/>MOUNTAIN</h1>
+        <h1 className="text-headline">EVERY BAR<br/>IN<br/>BELFAST</h1>
       </section>
 
       {/* Typeahead search with filter chips */}
@@ -260,7 +260,7 @@ export default function ListPage() {
       <div className="px-4 py-8 border-t border-[var(--color-rule)] mt-4">
         <div className="font-display text-lg uppercase mb-1">KNOW A BAR WE'RE MISSING?</div>
         <div className="text-meta opacity-55 mb-4">
-          Help us build the most complete après index on the mountain.
+          Help us build the most complete pint index in Belfast.
         </div>
         {!suggestOpen ? (
           <button
@@ -286,7 +286,7 @@ export default function ListPage() {
               className="w-full bg-[var(--color-ink-card)] border border-[var(--color-rule)] px-3 py-2 text-sm text-[var(--color-paper)]"
             >
               <option value="" className="bg-[var(--color-ink)]">Area (optional)</option>
-              {["Avoriaz","Morzine","Les Gets","Montriond","Châtel","Morgins","Champéry"].map(a => (
+              {["Cathedral Quarter","City Centre","Queen's Quarter","Ormeau Road","Lisburn Road","East Belfast","Stranmillis","Titanic Quarter","North Belfast","South Belfast"].map(a => (
                 <option key={a} value={a} className="bg-[var(--color-ink)]">{a}</option>
               ))}
             </select>

@@ -28,11 +28,13 @@ const PIN_FOCUS_DEAL = makePin("#F2C12E", true, 32);
 
 /* ── Area cluster labels (visible zoom ≤ 11) ──────────────── */
 const AREA_CENTROIDS = [
-  { name: "AVORIAZ",   lat: 46.1915, lng: 6.7720 },
-  { name: "MORZINE",   lat: 46.1789, lng: 6.7090 },
-  { name: "LES GETS",  lat: 46.1580, lng: 6.6700 },
-  { name: "CHÂTEL",    lat: 46.2648, lng: 6.8385 },
-  { name: "CHAMPÉRY",  lat: 46.1799, lng: 6.8736 },
+  { name: "CATHEDRAL QUARTER", lat: 54.6007, lng: -5.9292 },
+  { name: "CITY CENTRE",       lat: 54.5975, lng: -5.9301 },
+  { name: "QUEEN'S QUARTER",   lat: 54.5865, lng: -5.9355 },
+  { name: "ORMEAU ROAD",       lat: 54.5860, lng: -5.9228 },
+  { name: "LISBURN ROAD",      lat: 54.5825, lng: -5.9435 },
+  { name: "EAST BELFAST",      lat: 54.5893, lng: -5.9082 },
+  { name: "STRANMILLIS",       lat: 54.5808, lng: -5.9337 },
 ];
 
 function makeAreaLabel(name: string) {

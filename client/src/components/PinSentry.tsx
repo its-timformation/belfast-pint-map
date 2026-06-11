@@ -81,7 +81,7 @@ export function PinSentry({ onUnlock, onCancel }: Props) {
     <div className="fixed inset-0 z-[100] bg-[var(--color-ink)] flex flex-col" role="dialog" aria-label="Admin PIN entry">
       <div className="hairline-b">
         <div className="max-w-md mx-auto px-4 py-2 flex items-center justify-between text-eyebrow opacity-70">
-          <span>PORTES DU SOLEIL</span>
+          <span>BELFAST PINT MAP</span>
           <span>ADMIN ACCESS</span>
           <span className="text-[var(--color-blaze)] opacity-100">VOL.01</span>
         </div>

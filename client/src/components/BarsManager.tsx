@@ -173,7 +173,7 @@ function AddBarForm({ onCreated, areas }: { onCreated: () => void; areas: string
 
         <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}
           className="w-full bg-[var(--color-ink-card)] border border-[var(--color-rule)] px-3 py-2.5 min-h-[44px]">
-          {['bar', 'pub', 'restaurant-bar', 'slope-side', 'club'].map(t => <option key={t} value={t} className="bg-[var(--color-ink)]">{t}</option>)}
+          {['bar', 'pub', 'restaurant-bar', 'club', 'brewery', 'taproom'].map(t => <option key={t} value={t} className="bg-[var(--color-ink)]">{t}</option>)}
         </select>
 
         <label className="flex items-center gap-2 py-2 cursor-pointer">
@@ -773,7 +773,7 @@ Output as a downloadable .csv file named after the bar.`;
             </div>
             <select value={barForm.type} onChange={e => setBarForm({ ...barForm, type: e.target.value })}
               className="w-full bg-[var(--color-ink-card)] border border-[var(--color-rule)] px-3 py-3 min-h-[44px]">
-              {["bar", "pub", "restaurant-bar", "slope-side", "club"].map(t => <option key={t} value={t} className="bg-[var(--color-ink)]">{t}</option>)}
+              {["bar", "pub", "restaurant-bar", "club", "brewery", "taproom"].map(t => <option key={t} value={t} className="bg-[var(--color-ink)]">{t}</option>)}
             </select>
 
             <label className="flex items-center gap-2 py-2 cursor-pointer">

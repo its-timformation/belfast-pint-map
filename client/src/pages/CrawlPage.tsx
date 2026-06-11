@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronUp, ChevronDown, X, Search, Users, Copy, Share2, MapPin } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { ChevronRight, X, Search, Users, Share2, MapPin, GripVertical } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { useAppStore, formatPrice } from "../lib/store";
 import { LoadingMessage } from "../components/LoadingMessage";
@@ -21,10 +21,10 @@ interface CrawlDraft {
   tags: string[];
 }
 
-const DRAFT_KEY = "bpm-crawl-draft";
-const ACTIVE_KEY = "bpm-crawl-active";
+export const CRAWL_DRAFT_KEY  = "bpm-crawl-draft";
+export const CRAWL_ACTIVE_KEY = "bpm-crawl-active";
 
-const EMPTY_DRAFT: CrawlDraft = {
+const EMPTY: CrawlDraft = {
   name: "", description: "", barIds: [], authorName: "",
   shareCode: null, groupCode: null, generatedBy: "manual", tags: [],
 };
@@ -47,146 +47,131 @@ function crawlStats(stops: Array<{ lat: number; lng: number }>) {
   return { distanceKm: dist, durationMin: Math.round((dist / 5) * 60) + stops.length * 45 };
 }
 
-function formatDuration(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 ? `${h}h ${m > 0 ? m + "m" : ""}`.trim() : `${m}m`;
+function formatDuration(min: number) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ""}` : `${m}m`;
 }
 
-function buildGoogleMapsUrl(stops: Array<{ lat: number; lng: number }>): string {
+// Use bar names in Maps URLs — much clearer UX than raw coords
+function buildGoogleMapsUrl(stops: Array<{ name: string; lat: number; lng: number }>) {
   if (stops.length < 2) return "";
-  const origin = `${stops[0].lat},${stops[0].lng}`;
-  const destination = `${stops[stops.length - 1].lat},${stops[stops.length - 1].lng}`;
-  const waypoints = stops.slice(1, -1).map(s => `${s.lat},${s.lng}`).join("|");
-  const params = new URLSearchParams({ api: "1", origin, destination, travelmode: "walking" });
-  if (waypoints) params.set("waypoints", waypoints);
-  return `https://www.google.com/maps/dir/?${params.toString()}`;
+  // /dir/ path format accepts place names; append Belfast to disambiguate
+  const encode = (s: string) => encodeURIComponent(`${s}, Belfast`);
+  return `https://www.google.com/maps/dir/${stops.map(s => encode(s.name)).join("/")}`;
 }
 
-function buildAppleMapsUrl(stops: Array<{ lat: number; lng: number }>): string {
+function buildAppleMapsUrl(stops: Array<{ name: string; lat: number; lng: number }>) {
   if (stops.length < 2) return "";
-  const origin = `${stops[0].lat},${stops[0].lng}`;
-  const destination = `${stops[stops.length - 1].lat},${stops[stops.length - 1].lng}`;
-  return `https://maps.apple.com/?saddr=${origin}&daddr=${destination}&dirflg=w`;
+  const encode = (s: string) => encodeURIComponent(`${s} Belfast`);
+  // Apple Maps doesn't support multi-waypoint; link first → last by name
+  return `https://maps.apple.com/?saddr=${encode(stops[0].name)}&daddr=${encode(stops[stops.length - 1].name)}&dirflg=w`;
 }
 
-function copyToClipboard(text: string) {
-  navigator.clipboard?.writeText(text).catch(() => {});
+function shareCrawl(name: string, shareCode: string) {
+  const url = `${window.location.origin}/crawl/c/${shareCode}`;
+  if (navigator.share) navigator.share({ title: name, text: `Join my Belfast pub crawl: ${name}`, url }).catch(() => {});
+  else navigator.clipboard?.writeText(url).catch(() => {});
 }
 
-function nativeShare(title: string, url: string) {
-  if (navigator.share) {
-    navigator.share({ title, url }).catch(() => {});
-  } else {
-    copyToClipboard(url);
-  }
+function shareGroup(name: string, groupCode: string) {
+  const url = `${window.location.origin}/crawl/join/${groupCode}`;
+  if (navigator.share) navigator.share({ title: `Join ${name}`, text: `Join my live pub crawl! Code: ${groupCode}`, url }).catch(() => {});
+  else navigator.clipboard?.writeText(url).catch(() => {});
 }
 
-const PRESETS: Array<{ id: Preset; label: string; desc: string }> = [
-  { id: "cheapest", label: "CHEAPEST PINTS", desc: "Sorted by lowest avg price" },
-  { id: "guinness", label: "GUINNESS TRAIL", desc: "Best Guinness pourers" },
-  { id: "craft", label: "CRAFT BEER", desc: "IPAs, pale ales & local breweries" },
-  { id: "trad", label: "TRAD MUSIC", desc: "Bars with live sessions" },
-  { id: "brewery", label: "BREWERY RUN", desc: "Breweries & taprooms" },
-  { id: "area", label: "AREA CRAWL", desc: "Best bars in one neighbourhood" },
-  { id: "epic", label: "EPIC CRAWL", desc: "One bar from every area" },
+const PRESETS: Array<{ id: Preset; label: string }> = [
+  { id: "cheapest", label: "CHEAPEST PINTS" },
+  { id: "guinness", label: "GUINNESS TRAIL" },
+  { id: "craft",    label: "CRAFT BEER" },
+  { id: "trad",     label: "TRAD MUSIC" },
+  { id: "brewery",  label: "BREWERY RUN" },
+  { id: "epic",     label: "EPIC CRAWL" },
 ];
 
 /* ── Main component ─────────────────────────────────────────── */
 
 export default function CrawlPage() {
-  const params = useParams<{ code?: string }>();
+  const params   = useParams<{ code?: string }>();
   const navigate = useNavigate();
   const { currency } = useAppStore();
 
-  // Determine initial view from route
-  const routeMode = window.location.pathname.includes("/crawl/join/") ? "join"
-    : window.location.pathname.includes("/crawl/c/") ? "shared"
-    : null;
+  const isShared = window.location.pathname.includes("/crawl/c/");
+  const isJoin   = window.location.pathname.includes("/crawl/join/");
 
-  const [view, setView] = useState<View>(routeMode ?? "landing");
+  const [view, setView] = useState<View>(() => isShared ? "shared" : isJoin ? "join" : "landing");
   const [draft, setDraft] = useState<CrawlDraft>(() => {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "") as CrawlDraft; } catch { return EMPTY_DRAFT; }
+    try { return JSON.parse(localStorage.getItem(CRAWL_DRAFT_KEY) ?? "") as CrawlDraft; }
+    catch { return EMPTY; }
   });
-  const [activeStopIdx, setActiveStopIdx] = useState(0);
-  const [isHost, setIsHost] = useState(false);
-  const [groupCode, setGroupCode] = useState<string | null>(null);
-  const [joinCodeInput, setJoinCodeInput] = useState(params.code?.toUpperCase() ?? "");
-  const [search, setSearch] = useState("");
-  const [areaFilter, setAreaFilter] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [genError, setGenError] = useState("");
-  const [submitMsg, setSubmitMsg] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [activeStopIdx, setActiveStopIdx]   = useState(0);
+  const [isHost, setIsHost]                 = useState(false);
+  const [groupCode, setGroupCode]           = useState<string | null>(null);
+  const [joinInput, setJoinInput]           = useState(params.code?.toUpperCase() ?? "");
+  const [search, setSearch]                 = useState("");
+  const [selectedAreas, setSelectedAreas]   = useState<string[]>([]);
+  const [genError, setGenError]             = useState("");
+  const [submitMsg, setSubmitMsg]           = useState("");
+  // Drag state
+  const [dragIdx, setDragIdx]               = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx]       = useState<number | null>(null);
 
-  // Persist draft
-  useEffect(() => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  }, [draft]);
+  useEffect(() => { localStorage.setItem(CRAWL_DRAFT_KEY, JSON.stringify(draft)); }, [draft]);
 
-  // Restore active crawl if app reloaded mid-crawl
+  // Restore active crawl on mount
   useEffect(() => {
-    if (routeMode) return;
+    if (isShared || isJoin) return;
     try {
-      const saved = JSON.parse(localStorage.getItem(ACTIVE_KEY) ?? "");
-      if (saved?.barIds?.length) {
+      const saved = JSON.parse(localStorage.getItem(CRAWL_ACTIVE_KEY) ?? "");
+      if (saved?.draft?.barIds?.length) {
         setDraft(saved.draft);
         setActiveStopIdx(saved.activeStopIdx ?? 0);
-        setIsHost(saved.isHost ?? false);
+        setIsHost(saved.isHost ?? true);
         setGroupCode(saved.groupCode ?? null);
-        setView(saved.isGroup ? (saved.isHost ? "active" : "active") : "active");
+        setView("active");
       }
     } catch {}
   }, []);
 
-  // Fetch all bars (for builder typeahead + stop details)
   const { data: allBarsData, isLoading: barsLoading } = trpc.bars.getAllWithDetails.useQuery();
   const allBars = allBarsData ?? [];
 
-  // Shared crawl query
   const { data: sharedCrawl, isLoading: sharedLoading } = trpc.crawls.getByShareCode.useQuery(
-    { shareCode: params.code ?? "" },
-    { enabled: view === "shared" && !!params.code }
+    { shareCode: params.code ?? "" }, { enabled: view === "shared" && !!params.code }
   );
+  const { data: publishedCrawls } = trpc.crawls.getPublished.useQuery(undefined, { enabled: view === "discover" });
 
-  // Discover query
-  const { data: publishedCrawls } = trpc.crawls.getPublished.useQuery(
-    undefined,
-    { enabled: view === "discover" }
-  );
-
-  // Mutations
-  const createMut = trpc.crawls.create.useMutation();
-  const generateMut = trpc.crawls.generate.useMutation();
-  const submitMut = trpc.crawls.submit.useMutation();
+  const createMut     = trpc.crawls.create.useMutation();
+  const generateMut   = trpc.crawls.generate.useMutation();
+  const submitMut     = trpc.crawls.submit.useMutation();
   const startGroupMut = trpc.crawls.startGroup.useMutation();
-  const joinGroupMut = trpc.crawls.joinGroup.useMutation();
-  const advanceMut = trpc.crawls.advanceStop.useMutation();
-  const endGroupMut = trpc.crawls.endGroup.useMutation();
+  const joinGroupMut  = trpc.crawls.joinGroup.useMutation();
+  const advanceMut    = trpc.crawls.advanceStop.useMutation();
+  const endGroupMut   = trpc.crawls.endGroup.useMutation();
 
   // Guest polling
-  const [groupState, setGroupState] = useState<{ activeStopIndex: number; participantCount: number } | null>(null);
-  const groupStateQuery = trpc.crawls.getGroupState.useQuery(
+  const [guestStopIdx, setGuestStopIdx] = useState(0);
+  const [guestCount,   setGuestCount]   = useState(1);
+  const groupStateQ = trpc.crawls.getGroupState.useQuery(
     { groupCode: groupCode ?? "" },
     { enabled: !!groupCode && !isHost, refetchInterval: 5000 }
   );
   useEffect(() => {
-    if (groupStateQuery.data) setGroupState(groupStateQuery.data);
-  }, [groupStateQuery.data]);
+    if (groupStateQ.data) {
+      setGuestStopIdx(groupStateQ.data.activeStopIndex);
+      setGuestCount(groupStateQ.data.participantCount);
+    }
+  }, [groupStateQ.data]);
 
-  const currentStopIdx = isHost ? activeStopIdx : (groupState?.activeStopIndex ?? activeStopIdx);
+  const currentStopIdx = isHost ? activeStopIdx : guestStopIdx;
+  const participants   = isHost ? 1 : guestCount;
 
-  // Resolve stop bars
-  const stopBars = useMemo(() =>
-    draft.barIds.map(id => allBars.find(b => b.id === id)).filter(Boolean) as typeof allBars,
+  const stopBars = useMemo(
+    () => draft.barIds.map(id => allBars.find(b => b.id === id)).filter(Boolean) as typeof allBars,
     [draft.barIds, allBars]
   );
+  const stats   = useMemo(() => crawlStats(stopBars), [stopBars]);
+  const areas   = useMemo(() => [...new Set(allBars.map(b => b.area).filter(Boolean))] as string[], [allBars]);
 
-  const stats = useMemo(() => crawlStats(stopBars), [stopBars]);
-  const shareUrl = draft.shareCode ? `${window.location.origin}/crawl/c/${draft.shareCode}` : null;
-  const groupUrl = groupCode ? `${window.location.origin}/crawl/join/${groupCode}` : null;
-
-  // Typeahead filtered bars
   const filteredBars = useMemo(() => {
     if (!search.trim()) return [];
     const q = search.toLowerCase();
@@ -196,28 +181,22 @@ export default function CrawlPage() {
       .slice(0, 8);
   }, [search, allBars, draft.barIds]);
 
-  const areas = useMemo(() =>
-    [...new Set(allBars.map(b => b.area).filter(Boolean))] as string[],
-    [allBars]
-  );
+  /* ── Drag ────────────────────────────────────────────────── */
+
+  function handleDrop(toIdx: number) {
+    if (dragIdx !== null && dragIdx !== toIdx) {
+      const next = [...draft.barIds];
+      const [moved] = next.splice(dragIdx, 1);
+      next.splice(toIdx, 0, moved);
+      setDraft(d => ({ ...d, barIds: next }));
+    }
+    setDragIdx(null); setDragOverIdx(null);
+  }
 
   /* ── Handlers ────────────────────────────────────────────── */
 
-  function addBar(id: number) {
-    setDraft(d => ({ ...d, barIds: [...d.barIds, id] }));
-    setSearch("");
-  }
-
-  function removeBar(id: number) {
-    setDraft(d => ({ ...d, barIds: d.barIds.filter(x => x !== id) }));
-  }
-
-  function moveBar(idx: number, dir: -1 | 1) {
-    const next = [...draft.barIds];
-    const swap = idx + dir;
-    if (swap < 0 || swap >= next.length) return;
-    [next[idx], next[swap]] = [next[swap], next[idx]];
-    setDraft(d => ({ ...d, barIds: next }));
+  function toggleArea(a: string) {
+    setSelectedAreas(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
   }
 
   async function handleGenerate(preset: Preset) {
@@ -225,137 +204,107 @@ export default function CrawlPage() {
     try {
       const result = await generateMut.mutateAsync({
         preset,
-        area: preset === "area" ? areaFilter : undefined,
+        area: preset === "area" ? selectedAreas[0] : undefined,
         maxStops: 6,
       });
       setDraft(d => ({ ...d, barIds: result.barIds, name: d.name || result.name, tags: result.tags, generatedBy: "auto" }));
-    } catch (e: any) {
-      setGenError(e.message ?? "Generation failed");
-    }
+    } catch (e: any) { setGenError(e.message ?? "Generation failed"); }
   }
 
   async function handleSave() {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim() || draft.barIds.length < 2) return;
     const result = await createMut.mutateAsync({
-      name: draft.name,
-      description: draft.description || undefined,
-      barIds: draft.barIds,
-      authorName: draft.authorName || undefined,
-      tags: draft.tags,
-      generatedBy: draft.generatedBy,
+      name: draft.name, description: draft.description || undefined,
+      barIds: draft.barIds, authorName: draft.authorName || undefined,
+      tags: draft.tags, generatedBy: draft.generatedBy,
     });
     setDraft(d => ({ ...d, shareCode: result.shareCode }));
     setView("preview");
   }
 
+  function saveActive(idx: number, gc: string | null, host: boolean, isGroup: boolean) {
+    localStorage.setItem(CRAWL_ACTIVE_KEY, JSON.stringify({ draft, activeStopIdx: idx, isHost: host, isGroup, groupCode: gc }));
+  }
+
   function handleStartSolo() {
-    setIsHost(true);
-    setGroupCode(null);
-    setActiveStopIdx(0);
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ draft, activeStopIdx: 0, isHost: true, isGroup: false }));
-    setView("active");
+    setIsHost(true); setGroupCode(null); setActiveStopIdx(0);
+    saveActive(0, null, true, false); setView("active");
   }
 
   async function handleStartGroup() {
     if (!draft.shareCode) return;
     const { groupCode: gc } = await startGroupMut.mutateAsync({ shareCode: draft.shareCode });
-    setGroupCode(gc);
-    setIsHost(true);
-    setActiveStopIdx(0);
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ draft, activeStopIdx: 0, isHost: true, isGroup: true, groupCode: gc }));
-    setView("active");
+    setGroupCode(gc); setIsHost(true); setActiveStopIdx(0);
+    saveActive(0, gc, true, true); setView("active");
   }
 
   async function handleJoinGroup() {
-    const code = joinCodeInput.trim().toUpperCase();
+    const code = joinInput.trim().toUpperCase();
     if (!code) return;
     try {
-      const result = await joinGroupMut.mutateAsync({ groupCode: code });
-      const joinedBarIds = JSON.parse(result.barIds) as number[];
-      setDraft(d => ({ ...d, name: result.name, barIds: joinedBarIds, shareCode: result.shareCode }));
-      setGroupCode(code);
-      setIsHost(false);
-      setActiveStopIdx(result.activeStopIndex);
+      const res = await joinGroupMut.mutateAsync({ groupCode: code });
+      const barIds = JSON.parse(res.barIds) as number[];
+      setDraft(d => ({ ...d, name: res.name, barIds, shareCode: res.shareCode }));
+      setGroupCode(code); setIsHost(false); setActiveStopIdx(res.activeStopIndex);
       setView("active");
-    } catch (e: any) {
-      setGenError(e.message ?? "Could not join group");
-    }
+    } catch (e: any) { setGenError(e.message ?? "Could not join group"); }
   }
 
   async function handleAdvance() {
     if (currentStopIdx >= stopBars.length - 1) {
       if (groupCode && isHost) await endGroupMut.mutateAsync({ groupCode });
-      localStorage.removeItem(ACTIVE_KEY);
-      setView("done");
-      return;
+      localStorage.removeItem(CRAWL_ACTIVE_KEY); setView("done"); return;
     }
     if (groupCode && isHost) {
-      const result = await advanceMut.mutateAsync({ groupCode });
-      setActiveStopIdx(result.activeStopIndex);
+      const res = await advanceMut.mutateAsync({ groupCode });
+      setActiveStopIdx(res.activeStopIndex);
+      saveActive(res.activeStopIndex, groupCode, true, true);
     } else {
-      setActiveStopIdx(i => i + 1);
+      const next = activeStopIdx + 1;
+      setActiveStopIdx(next); saveActive(next, null, true, false);
     }
-  }
-
-  async function handleSubmitCommunity() {
-    if (!draft.shareCode) return;
-    await submitMut.mutateAsync({ shareCode: draft.shareCode });
-    setSubmitMsg("Submitted! It'll appear in Discover once approved.");
-  }
-
-  function handleCopy(text: string) {
-    copyToClipboard(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  function startFromShared() {
-    if (!sharedCrawl) return;
-    const barIds = JSON.parse(sharedCrawl.barIds) as number[];
-    setDraft({ ...EMPTY_DRAFT, name: sharedCrawl.name, description: sharedCrawl.description ?? "", barIds, shareCode: sharedCrawl.shareCode, tags: JSON.parse(sharedCrawl.tags ?? "[]") });
-    setView("preview");
   }
 
   function reset() {
-    setDraft(EMPTY_DRAFT);
-    setActiveStopIdx(0);
-    setGroupCode(null);
-    setIsHost(false);
-    localStorage.removeItem(ACTIVE_KEY);
-    setView("landing");
+    setDraft(EMPTY); setActiveStopIdx(0); setGroupCode(null); setIsHost(false);
+    localStorage.removeItem(CRAWL_ACTIVE_KEY); setView("landing");
   }
 
-  /* ── Sub-views ──────────────────────────────────────────── */
+  /* ── Views ──────────────────────────────────────────────── */
 
-  if (barsLoading && view !== "discover") return <LoadingMessage />;
+  if (barsLoading && view !== "discover" && view !== "shared") return <LoadingMessage />;
 
-  /* SHARED VIEW */
+  /* SHARED */
   if (view === "shared") {
     if (sharedLoading) return <LoadingMessage />;
     if (!sharedCrawl) return (
-      <div className="max-w-md mx-auto px-4 py-8 text-center">
+      <div className="max-w-md mx-auto px-4 py-12 text-center">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-2">NOT FOUND</div>
         <p className="text-meta opacity-60">This crawl link has expired or doesn't exist.</p>
       </div>
     );
     const sharedBarIds = JSON.parse(sharedCrawl.barIds) as number[];
-    const sharedBars = sharedBarIds.map(id => allBars.find(b => b.id === id)).filter(Boolean) as typeof allBars;
-    const sharedStats = crawlStats(sharedBars);
+    const sharedBars   = sharedBarIds.map(id => allBars.find(b => b.id === id)).filter(Boolean) as typeof allBars;
+    const ss = crawlStats(sharedBars);
     return (
       <div className="grain-ink max-w-md mx-auto">
         <section className="px-4 pt-6 pb-4">
           <div className="text-eyebrow text-[var(--color-blaze)] mb-2">SHARED CRAWL</div>
           <h1 className="text-hero text-[var(--color-paper)] mb-1">{sharedCrawl.name.toUpperCase()}</h1>
-          {sharedCrawl.description && <p className="text-meta text-[var(--color-paper)] opacity-60 mb-3">{sharedCrawl.description}</p>}
-          <div className="text-eyebrow opacity-50">{sharedBars.length} STOPS · {sharedStats.distanceKm.toFixed(1)} KM · ~{formatDuration(sharedStats.durationMin)}</div>
+          {sharedCrawl.description && <p className="text-meta opacity-60 mb-2">{sharedCrawl.description}</p>}
+          <div className="text-eyebrow opacity-50">{sharedBars.length} STOPS · {ss.distanceKm.toFixed(1)} KM · ~{formatDuration(ss.durationMin)}</div>
         </section>
         <MapsButtons stops={sharedBars} />
         <section className="px-4 pb-4">
           <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">ROUTE</div>
-          {sharedBars.map((bar, i) => <StopRow key={bar.id} bar={bar} idx={i} currency={currency} />)}
+          {sharedBars.map((b, i) => <StopRow key={b.id} bar={b} idx={i} currency={currency} />)}
         </section>
         <div className="px-4 pb-6">
-          <button onClick={startFromShared} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
+          <button onClick={() => {
+            const barIds = JSON.parse(sharedCrawl.barIds) as number[];
+            setDraft({ ...EMPTY, name: sharedCrawl.name, description: sharedCrawl.description ?? "", barIds, shareCode: sharedCrawl.shareCode, tags: JSON.parse(sharedCrawl.tags ?? "[]") });
+            setView("preview");
+          }} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
             START THIS CRAWL →
           </button>
         </div>
@@ -363,64 +312,73 @@ export default function CrawlPage() {
     );
   }
 
-  /* JOIN VIEW */
-  if (view === "join") {
-    return (
-      <div className="grain-ink max-w-md mx-auto px-4 pt-6">
-        <div className="text-eyebrow text-[var(--color-blaze)] mb-2">JOIN A GROUP CRAWL</div>
-        <h1 className="text-hero text-[var(--color-paper)] mb-6">ENTER<br/>GROUP<br/><span className="text-[var(--color-blaze)]">CODE</span></h1>
-        <input
-          value={joinCodeInput}
-          onChange={e => { setJoinCodeInput(e.target.value.toUpperCase()); setGenError(""); }}
-          placeholder="ABC123"
-          maxLength={6}
-          className="w-full bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-3xl text-center tracking-[0.3em] py-4 mb-4 focus:outline-none focus:border-[var(--color-blaze)]"
-        />
-        {genError && <p className="text-meta text-[var(--color-blaze)] mb-3">{genError}</p>}
-        <button
-          onClick={handleJoinGroup}
-          disabled={joinCodeInput.length !== 6 || joinGroupMut.isPending}
-          className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider disabled:opacity-40"
-        >
-          {joinGroupMut.isPending ? "JOINING..." : "JOIN CRAWL →"}
-        </button>
-        <button onClick={() => setView("landing")} className="w-full mt-2 text-meta opacity-50 py-2">← BACK</button>
-      </div>
-    );
-  }
+  /* JOIN */
+  if (view === "join") return (
+    <div className="grain-ink max-w-md mx-auto px-4 pt-8 pb-6">
+      <div className="text-eyebrow text-[var(--color-blaze)] mb-2">JOIN A GROUP CRAWL</div>
+      <h1 className="text-hero text-[var(--color-paper)] mb-8">ENTER<br/>GROUP<br/><span className="text-[var(--color-blaze)]">CODE</span></h1>
+      <input value={joinInput} onChange={e => { setJoinInput(e.target.value.toUpperCase()); setGenError(""); }}
+        placeholder="ABC123" maxLength={6}
+        className="w-full bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-3xl text-center tracking-[0.3em] py-5 mb-4 focus:outline-none focus:border-[var(--color-blaze)]"
+      />
+      {genError && <p className="text-meta text-[var(--color-blaze)] mb-3">{genError}</p>}
+      <button onClick={handleJoinGroup} disabled={joinInput.length !== 6 || joinGroupMut.isPending}
+        className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider disabled:opacity-40 mb-2">
+        {joinGroupMut.isPending ? "JOINING..." : "JOIN CRAWL →"}
+      </button>
+      <button onClick={() => setView("landing")} className="w-full text-meta opacity-50 py-2">← BACK</button>
+    </div>
+  );
 
-  /* LANDING VIEW */
+  /* LANDING */
   if (view === "landing") {
+    const hasDraft = draft.barIds.length > 0;
     return (
       <div className="grain-ink max-w-md mx-auto">
-        <section className="px-4 pt-6 pb-6">
+        <section className="px-4 pt-6 pb-8">
           <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DISPATCH 04 · PUB CRAWLS</div>
-          <h1 className="text-hero text-[var(--color-paper)] mb-6">
+          <h1 className="text-hero text-[var(--color-paper)] mb-8">
             EXPLORE<br/><span className="text-[var(--color-blaze)]">BELFAST</span><br/>YOUR WAY
           </h1>
-          <button onClick={() => setView("building")} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider mb-3">
-            BUILD A CRAWL →
-          </button>
-          <button onClick={() => setView("discover")} className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider mb-3 hover:border-[var(--color-blaze)]">
-            DISCOVER CRAWLS
-          </button>
-          <div className="hairline-t pt-4 mt-2">
-            <div className="text-eyebrow opacity-50 mb-2">JOINING A GROUP?</div>
+          <div className="flex gap-2 mb-8">
+            {[
+              { label: "BARS",    value: String(allBars.length).padStart(2,"0") },
+              { label: "GUINNESS",value: String(allBars.filter(b=>b.servesGuinness).length).padStart(2,"0") },
+              { label: "AREAS",   value: String(areas.length).padStart(2,"0") },
+            ].map(s => (
+              <div key={s.label} className="flex-1 border border-[var(--color-rule)] px-2.5 py-2.5">
+                <div className="text-eyebrow opacity-50">{s.label}</div>
+                <div className="font-display text-2xl text-[var(--color-paper)] mt-0.5">{s.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {hasDraft && (
+            <div className="border border-[var(--color-rule)] p-3 mb-4">
+              <div className="text-eyebrow opacity-50 mb-1">DRAFT IN PROGRESS</div>
+              <div className="font-display text-base uppercase text-[var(--color-paper)] mb-2">
+                {draft.name || "UNNAMED CRAWL"} · {draft.barIds.length} STOPS
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setView("building")} className="flex-1 bg-[var(--color-blaze)] text-[var(--color-paper)] text-eyebrow py-2.5">RESUME</button>
+                <button onClick={() => setDraft(EMPTY)} className="border border-[var(--color-rule)] text-[var(--color-paper)] text-eyebrow px-4 py-2.5 opacity-60 hover:border-[var(--color-blaze)]">CLEAR</button>
+              </div>
+            </div>
+          )}
+
+          <button onClick={() => setView("building")} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider mb-3">BUILD A CRAWL →</button>
+          <button onClick={() => setView("discover")} className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider mb-8 hover:border-[var(--color-blaze)]">DISCOVER CRAWLS</button>
+
+          <div className="hairline-t pt-6">
+            <div className="text-eyebrow opacity-50 mb-3">JOINING A GROUP?</div>
             <div className="flex gap-2">
-              <input
-                value={joinCodeInput}
-                onChange={e => setJoinCodeInput(e.target.value.toUpperCase())}
-                placeholder="ENTER CODE"
-                maxLength={6}
-                className="flex-1 bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-mono text-base px-3 py-2 tracking-[0.2em] focus:outline-none focus:border-[var(--color-blaze)]"
+              <input value={joinInput} onChange={e => { setJoinInput(e.target.value.toUpperCase()); setGenError(""); }}
+                placeholder="ENTER CODE" maxLength={6}
+                className="flex-1 bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-mono text-base px-3 py-3 tracking-[0.2em] focus:outline-none focus:border-[var(--color-blaze)]"
               />
-              <button
-                onClick={() => { if (joinCodeInput.length === 6) handleJoinGroup(); }}
-                disabled={joinCodeInput.length !== 6}
-                className="bg-[var(--color-blaze)] text-[var(--color-paper)] px-4 font-display text-sm tracking-wider disabled:opacity-40"
-              >
-                JOIN
-              </button>
+              <button onClick={() => { if (joinInput.length === 6) handleJoinGroup(); }}
+                disabled={joinInput.length !== 6 || joinGroupMut.isPending}
+                className="bg-[var(--color-blaze)] text-[var(--color-paper)] px-5 font-display text-sm tracking-wider disabled:opacity-40">JOIN</button>
             </div>
             {genError && <p className="text-meta text-[var(--color-blaze)] mt-2">{genError}</p>}
           </div>
@@ -429,254 +387,228 @@ export default function CrawlPage() {
     );
   }
 
-  /* BUILDER VIEW */
-  if (view === "building") {
-    return (
-      <div className="grain-ink max-w-md mx-auto">
-        <section className="px-4 pt-6 pb-3">
-          <div className="text-eyebrow text-[var(--color-blaze)] mb-3">BUILD YOUR CRAWL</div>
-          <input
-            value={draft.name}
-            onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-            placeholder="Name your crawl"
-            className="w-full bg-transparent border-b border-[var(--color-rule)] text-[var(--color-paper)] font-display text-2xl py-2 mb-2 focus:outline-none focus:border-[var(--color-blaze)] placeholder:opacity-30"
-          />
-          <textarea
-            value={draft.description}
-            onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
-            placeholder="Description (optional)"
-            rows={2}
-            className="w-full bg-transparent border-b border-[var(--color-rule)] text-[var(--color-paper)] text-meta py-2 mb-4 focus:outline-none focus:border-[var(--color-blaze)] placeholder:opacity-30 resize-none"
-          />
+  /* BUILDER */
+  if (view === "building") return (
+    <div className="grain-ink max-w-md mx-auto">
+      <section className="px-4 pt-6 pb-6">
+        <div className="text-eyebrow text-[var(--color-blaze)] mb-3">BUILD YOUR CRAWL</div>
+        <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+          placeholder="Name your crawl"
+          className="w-full bg-transparent border-b border-[var(--color-rule)] text-[var(--color-paper)] font-display text-2xl py-2 mb-2 focus:outline-none focus:border-[var(--color-blaze)] placeholder:opacity-30"
+        />
+        <textarea value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
+          placeholder="Description (optional)" rows={2}
+          className="w-full bg-transparent border-b border-[var(--color-rule)] text-[var(--color-paper)] text-meta py-2 mb-6 focus:outline-none focus:border-[var(--color-blaze)] placeholder:opacity-30 resize-none"
+        />
 
-          {/* Auto-generate */}
-          <div className="hairline-b pb-1.5 mb-3 flex items-baseline justify-between">
-            <div className="font-display text-base text-[var(--color-paper)]">AUTO-GENERATE</div>
-            <div className="text-eyebrow opacity-40">PICK A PRESET</div>
+        {/* Search */}
+        <div className="hairline-b pb-1.5 mb-3 font-display text-base text-[var(--color-paper)]">ADD STOPS</div>
+        <div className="relative mb-5">
+          <div className="flex items-center gap-2 border border-[var(--color-rule)] px-3 py-3 focus-within:border-[var(--color-blaze)]">
+            <Search size={14} className="opacity-40 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search bars…"
+              className="flex-1 bg-transparent text-[var(--color-paper)] text-meta focus:outline-none placeholder:opacity-40"
+            />
           </div>
-          <div className="flex flex-wrap gap-2 mb-1">
-            {PRESETS.filter(p => p.id !== "area").map(p => (
-              <button
-                key={p.id}
-                onClick={() => handleGenerate(p.id)}
-                disabled={generateMut.isPending}
-                className="text-eyebrow border border-[var(--color-rule)] text-[var(--color-paper)] px-2.5 py-1.5 hover:border-[var(--color-blaze)] hover:text-[var(--color-blaze)] disabled:opacity-40 transition-colors"
-              >
+          {filteredBars.length > 0 && (
+            <ul className="border border-[var(--color-rule)] border-t-0 absolute w-full z-10 bg-[var(--color-ink)]">
+              {filteredBars.map(bar => (
+                <li key={bar.id}>
+                  <button onClick={() => { setDraft(d => ({ ...d, barIds: [...d.barIds, bar.id] })); setSearch(""); }}
+                    className="w-full text-left px-3 py-3 flex items-center justify-between hairline-b-soft hover:bg-[var(--color-blaze)] group">
+                    <div>
+                      <div className="font-display text-sm uppercase text-[var(--color-paper)]">{bar.name}</div>
+                      <div className="text-meta opacity-50">{bar.area}</div>
+                    </div>
+                    <span className="text-eyebrow opacity-40 group-hover:opacity-100">ADD +</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Stops list — draggable */}
+        {stopBars.length > 0 && (
+          <>
+            <div className="hairline-b pb-1.5 mb-2 flex items-baseline justify-between">
+              <div className="font-display text-base text-[var(--color-paper)]">YOUR STOPS</div>
+              <div className="text-eyebrow opacity-40">{stopBars.length} · {stats.distanceKm.toFixed(1)} KM · ~{formatDuration(stats.durationMin)}</div>
+            </div>
+            <ul className="mb-6">
+              {stopBars.map((bar, i) => (
+                <li key={bar.id} draggable
+                  onDragStart={() => setDragIdx(i)}
+                  onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                  onDrop={() => handleDrop(i)}
+                  onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                  className={`flex items-center gap-1 hairline-b-soft transition-opacity ${dragIdx === i ? "opacity-40" : ""} ${dragOverIdx === i && dragIdx !== i ? "border-l-2 border-[var(--color-blaze)] pl-1" : ""}`}
+                >
+                  <div className="cursor-grab flex items-center justify-center w-11 h-11 opacity-25 hover:opacity-60 shrink-0">
+                    <GripVertical size={16} />
+                  </div>
+                  <span className="text-eyebrow text-[var(--color-blaze)] w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
+                  <div className="flex-1 min-w-0 py-2.5">
+                    <div className="font-display text-sm uppercase truncate text-[var(--color-paper)]">{bar.name}</div>
+                    <div className="text-meta opacity-50">{bar.area}</div>
+                  </div>
+                  <button onClick={() => setDraft(d => ({ ...d, barIds: d.barIds.filter(x => x !== bar.id) }))}
+                    className="flex items-center justify-center w-11 h-11 text-[var(--color-blaze)] opacity-50 hover:opacity-100 shrink-0"
+                    aria-label={`Remove ${bar.name}`}>
+                    <X size={18} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {/* Auto-generate — clearly optional */}
+        <div className="hairline-t pt-5">
+          <div className="flex items-baseline justify-between mb-1">
+            <div className="font-display text-base text-[var(--color-paper)]">AUTO-GENERATE</div>
+            <div className="text-eyebrow opacity-40">OPTIONAL</div>
+          </div>
+          <p className="text-meta opacity-50 mb-3">Pick a preset and we'll build the route for you.</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {PRESETS.map(p => (
+              <button key={p.id} onClick={() => handleGenerate(p.id)} disabled={generateMut.isPending}
+                className="text-eyebrow border border-[var(--color-rule)] text-[var(--color-paper)] px-3 py-2 hover:border-[var(--color-blaze)] hover:text-[var(--color-blaze)] disabled:opacity-40 transition-colors">
                 {p.label}
               </button>
             ))}
           </div>
-          <div className="flex gap-2 mb-4">
-            <select
-              value={areaFilter}
-              onChange={e => setAreaFilter(e.target.value)}
-              className="flex-1 bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] text-meta px-2 py-1.5 focus:outline-none focus:border-[var(--color-blaze)]"
-            >
-              <option value="">Area crawl — pick area</option>
-              {areas.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
-            <button
-              onClick={() => { if (areaFilter) handleGenerate("area"); }}
-              disabled={!areaFilter || generateMut.isPending}
-              className="text-eyebrow border border-[var(--color-rule)] text-[var(--color-paper)] px-3 py-1.5 hover:border-[var(--color-blaze)] disabled:opacity-40"
-            >
-              GO
+          <div className="text-eyebrow opacity-50 mb-2">AREA CRAWL</div>
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            <button onClick={() => setSelectedAreas([])}
+              className={`text-eyebrow px-2.5 py-2 border transition-colors ${selectedAreas.length === 0 ? "bg-[var(--color-blaze)] border-[var(--color-blaze)] text-[var(--color-paper)]" : "border-[var(--color-rule)] text-[var(--color-paper)] opacity-60"}`}>
+              ALL
             </button>
+            {areas.map(a => (
+              <button key={a} onClick={() => toggleArea(a)}
+                className={`text-eyebrow px-2.5 py-2 border transition-colors ${selectedAreas.includes(a) ? "bg-[var(--color-blaze)] border-[var(--color-blaze)] text-[var(--color-paper)]" : "border-[var(--color-rule)] text-[var(--color-paper)] opacity-60"}`}>
+                {a}
+              </button>
+            ))}
           </div>
-          {genError && <p className="text-meta text-[var(--color-blaze)] mb-3">{genError}</p>}
+          <button onClick={() => { if (selectedAreas.length > 0) handleGenerate("area"); }}
+            disabled={selectedAreas.length === 0 || generateMut.isPending}
+            className="text-eyebrow border border-[var(--color-rule)] text-[var(--color-paper)] px-3 py-2 hover:border-[var(--color-blaze)] disabled:opacity-40">
+            GENERATE AREA CRAWL
+          </button>
+          {genError && <p className="text-meta text-[var(--color-blaze)] mt-2">{genError}</p>}
+        </div>
 
-          {/* Selected stops */}
-          {draft.barIds.length > 0 && (
-            <>
-              <div className="hairline-b pb-1.5 mb-2 flex items-baseline justify-between">
-                <div className="font-display text-base text-[var(--color-paper)]">YOUR STOPS</div>
-                <div className="text-eyebrow opacity-40">{draft.barIds.length} ADDED · {stats.distanceKm.toFixed(1)} KM · ~{formatDuration(stats.durationMin)}</div>
-              </div>
-              <ul className="mb-4">
-                {stopBars.map((bar, i) => (
-                  <li key={bar.id} className="flex items-center gap-2 hairline-b-soft py-2">
-                    <span className="num-rail text-[var(--color-blaze)] w-6 text-eyebrow">{String(i + 1).padStart(2, "0")}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-display text-sm uppercase truncate text-[var(--color-paper)]">{bar.name}</div>
-                      <div className="text-meta opacity-50">{bar.area}</div>
-                    </div>
-                    <button onClick={() => moveBar(i, -1)} disabled={i === 0} className="p-1 opacity-40 hover:opacity-100 disabled:opacity-20"><ChevronUp size={14} /></button>
-                    <button onClick={() => moveBar(i, 1)} disabled={i === stopBars.length - 1} className="p-1 opacity-40 hover:opacity-100 disabled:opacity-20"><ChevronDown size={14} /></button>
-                    <button onClick={() => removeBar(bar.id)} className="p-1 opacity-40 hover:opacity-100 text-[var(--color-blaze)]"><X size={14} /></button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {/* Typeahead search */}
-          <div className="relative mb-4">
-            <div className="flex items-center gap-2 border border-[var(--color-rule)] px-3 py-2 focus-within:border-[var(--color-blaze)]">
-              <Search size={14} className="opacity-40 shrink-0" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search bars to add…"
-                className="flex-1 bg-transparent text-[var(--color-paper)] text-meta focus:outline-none placeholder:opacity-40"
-              />
-            </div>
-            {filteredBars.length > 0 && (
-              <ul className="border border-[var(--color-rule)] border-t-0">
-                {filteredBars.map(bar => (
-                  <li key={bar.id}>
-                    <button
-                      onClick={() => addBar(bar.id)}
-                      className="w-full text-left px-3 py-2.5 flex items-center justify-between hairline-b-soft hover:bg-[var(--color-blaze)] hover:text-[var(--color-paper)] group"
-                    >
-                      <div>
-                        <div className="font-display text-sm uppercase text-[var(--color-paper)] group-hover:text-[var(--color-paper)]">{bar.name}</div>
-                        <div className="text-meta opacity-50">{bar.area}</div>
-                      </div>
-                      <span className="text-eyebrow opacity-40 group-hover:opacity-100">ADD +</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={draft.barIds.length < 2 || !draft.name.trim() || createMut.isPending}
-            className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider disabled:opacity-40 mb-2"
-          >
-            {createMut.isPending ? "SAVING..." : "SAVE & GET SHARE LINK →"}
+        <div className="mt-6">
+          <button onClick={handleSave} disabled={draft.barIds.length < 2 || !draft.name.trim() || createMut.isPending}
+            className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider disabled:opacity-40 mb-2">
+            {createMut.isPending ? "SAVING..." : "SAVE & SHARE →"}
           </button>
           <button onClick={() => setView("landing")} className="w-full text-meta opacity-50 py-2 text-center">← BACK</button>
-        </section>
-      </div>
-    );
-  }
-
-  /* PREVIEW VIEW */
-  if (view === "preview") {
-    return (
-      <div className="grain-ink max-w-md mx-auto">
-        <section className="px-4 pt-6 pb-4">
-          <div className="text-eyebrow text-[var(--color-blaze)] mb-2">CRAWL SAVED</div>
-          <h1 className="font-display text-2xl text-[var(--color-paper)] uppercase mb-1">{draft.name}</h1>
-          {draft.description && <p className="text-meta text-[var(--color-paper)] opacity-60 mb-2">{draft.description}</p>}
-          <div className="text-eyebrow opacity-50 mb-4">{stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} KM · ~{formatDuration(stats.durationMin)}</div>
-
-          <MapsButtons stops={stopBars} />
-
-          {/* Share */}
-          {shareUrl && (
-            <div className="border border-[var(--color-rule)] p-3 mb-4">
-              <div className="text-eyebrow opacity-50 mb-1">SHARE LINK</div>
-              <div className="flex items-center gap-2">
-                <span className="text-meta text-[var(--color-paper)] opacity-60 truncate flex-1 font-mono text-xs">{shareUrl}</span>
-                <button onClick={() => handleCopy(shareUrl)} className="p-1.5 border border-[var(--color-rule)] hover:border-[var(--color-blaze)]">
-                  {copied ? <span className="text-eyebrow text-[var(--color-verified)]">✓</span> : <Copy size={13} />}
-                </button>
-                <button onClick={() => nativeShare(draft.name, shareUrl)} className="p-1.5 border border-[var(--color-rule)] hover:border-[var(--color-blaze)]">
-                  <Share2 size={13} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">ROUTE</div>
-          {stopBars.map((bar, i) => <StopRow key={bar.id} bar={bar} idx={i} currency={currency} />)}
-        </section>
-
-        <div className="px-4 pb-2 flex flex-col gap-2">
-          <button onClick={handleStartSolo} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
-            START SOLO CRAWL →
-          </button>
-          <button onClick={handleStartGroup} disabled={!draft.shareCode || startGroupMut.isPending} className="w-full border border-[var(--color-blaze)] text-[var(--color-blaze)] font-display text-base py-3 tracking-wider disabled:opacity-40">
-            <Users size={15} className="inline mr-2 mb-0.5" />
-            {startGroupMut.isPending ? "STARTING..." : "START GROUP CRAWL"}
-          </button>
-          {!submitMsg ? (
-            <button onClick={handleSubmitCommunity} disabled={!draft.shareCode || submitMut.isPending} className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-sm py-2.5 tracking-wider hover:border-[var(--color-blaze)] disabled:opacity-40">
-              {submitMut.isPending ? "SUBMITTING..." : "SUBMIT TO COMMUNITY →"}
-            </button>
-          ) : (
-            <p className="text-meta text-[var(--color-verified)] text-center py-2">{submitMsg}</p>
-          )}
-          <button onClick={() => setView("building")} className="text-meta opacity-50 py-2 text-center">← EDIT CRAWL</button>
         </div>
-      </div>
-    );
-  }
+      </section>
+    </div>
+  );
 
-  /* ACTIVE VIEW (solo + group host + group guest) */
+  /* PREVIEW */
+  if (view === "preview") return (
+    <div className="grain-ink max-w-md mx-auto">
+      <section className="px-4 pt-6 pb-4">
+        <div className="text-eyebrow text-[var(--color-blaze)] mb-2">CRAWL SAVED</div>
+        <h1 className="font-display text-2xl text-[var(--color-paper)] uppercase mb-1">{draft.name}</h1>
+        {draft.description && <p className="text-meta opacity-60 mb-2">{draft.description}</p>}
+        <div className="text-eyebrow opacity-50 mb-5">{stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} KM · ~{formatDuration(stats.durationMin)}</div>
+        <MapsButtons stops={stopBars} />
+        <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">ROUTE</div>
+        {stopBars.map((b, i) => <StopRow key={b.id} bar={b} idx={i} currency={currency} />)}
+      </section>
+      <div className="px-4 pb-2 flex flex-col gap-2">
+        <button onClick={handleStartSolo} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">START SOLO CRAWL →</button>
+        <button onClick={handleStartGroup} disabled={!draft.shareCode || startGroupMut.isPending}
+          className="w-full border border-[var(--color-blaze)] text-[var(--color-blaze)] font-display text-base py-3 tracking-wider disabled:opacity-40 flex items-center justify-center gap-2">
+          <Users size={15} />{startGroupMut.isPending ? "STARTING..." : "START GROUP CRAWL"}
+        </button>
+        {draft.shareCode && (
+          <button onClick={() => shareCrawl(draft.name, draft.shareCode!)}
+            className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-sm py-3 tracking-wider hover:border-[var(--color-blaze)] flex items-center justify-center gap-2">
+            <Share2 size={14} /> SHARE CRAWL
+          </button>
+        )}
+        {!submitMsg ? (
+          <button onClick={async () => { if (!draft.shareCode) return; await submitMut.mutateAsync({ shareCode: draft.shareCode }); setSubmitMsg("Submitted for community review."); }}
+            disabled={!draft.shareCode || submitMut.isPending}
+            className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] text-meta py-2.5 hover:border-[var(--color-blaze)] disabled:opacity-40">
+            {submitMut.isPending ? "SUBMITTING..." : "SUBMIT TO COMMUNITY →"}
+          </button>
+        ) : <p className="text-meta text-[var(--color-verified)] text-center py-2">{submitMsg}</p>}
+        <button onClick={() => setView("building")} className="text-meta opacity-50 py-2 text-center">← EDIT CRAWL</button>
+      </div>
+    </div>
+  );
+
+  /* ACTIVE */
   if (view === "active") {
     const currentBar = stopBars[currentStopIdx];
-    const nextBar = stopBars[currentStopIdx + 1];
+    const nextBar    = stopBars[currentStopIdx + 1];
     const isLastStop = currentStopIdx >= stopBars.length - 1;
-    const isGuest = !!groupCode && !isHost;
-    const participants = groupState?.participantCount ?? 1;
+    const isGuest    = !!groupCode && !isHost;
 
     return (
       <div className="grain-ink max-w-md mx-auto">
         <section className="px-4 pt-5">
-          <div className="text-eyebrow text-[var(--color-blaze)] mb-1">
-            STOP {currentStopIdx + 1} OF {stopBars.length} · {currentBar?.area?.toUpperCase()}
-          </div>
+          <div className="text-eyebrow text-[var(--color-blaze)] mb-1">STOP {currentStopIdx + 1} OF {stopBars.length} · {currentBar?.area?.toUpperCase()}</div>
+
           {groupCode && (
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center gap-1.5 text-eyebrow opacity-60">
-                <Users size={12} />{participants} {participants === 1 ? "PERSON" : "PEOPLE"}
-              </div>
-              <div className="flex items-center gap-1.5 border border-[var(--color-rule)] px-2 py-1">
-                <span className="text-eyebrow text-[var(--color-paper)] opacity-50">CODE</span>
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              <div className="flex items-center gap-1.5 text-eyebrow opacity-60"><Users size={12} />{participants} {participants === 1 ? "PERSON" : "PEOPLE"}</div>
+              <div className="flex items-center gap-2 border border-[var(--color-rule)] px-2.5 py-1.5">
+                <span className="text-eyebrow opacity-50">CODE</span>
                 <span className="font-mono text-sm text-[var(--color-paper)] tracking-widest">{groupCode}</span>
-                <button onClick={() => handleCopy(groupCode)} className="opacity-50 hover:opacity-100"><Copy size={11} /></button>
               </div>
-              {groupUrl && (
-                <button onClick={() => nativeShare(`Join ${draft.name}`, groupUrl)} className="opacity-50 hover:opacity-100">
-                  <Share2 size={13} />
-                </button>
-              )}
+              <button onClick={() => shareGroup(draft.name, groupCode)}
+                className="flex items-center gap-1.5 text-eyebrow opacity-60 hover:opacity-100"><Share2 size={13} /> INVITE</button>
             </div>
           )}
 
-          {/* Current stop — blaze block */}
-          <div className="grain-blaze text-[var(--color-paper)] mx-0 mb-4 px-4 py-4">
-            <div className="text-eyebrow opacity-80 mb-1">NOW AT</div>
-            <div className="font-display text-2xl uppercase leading-none mb-1">{currentBar?.name}</div>
-            {(() => {
-              const beers = (currentBar?.drinks ?? []).filter(d => /pint|beer|lager|guinness|harp|tennent|stella|ipa/i.test(d.name));
-              const cheapest = beers.reduce<typeof beers[0] | null>((min, d) => !min || d.price < min.price ? d : min, null);
-              return cheapest ? (
-                <div className="text-meta opacity-80">{cheapest.name.toUpperCase()} · {formatPrice(cheapest.price, currency)}</div>
-              ) : null;
-            })()}
-          </div>
+          {/* Current stop — link to bar detail */}
+          {currentBar && (
+            <Link to={`/bar/${currentBar.id}`} className="block grain-blaze text-[var(--color-paper)] mb-4 px-4 py-4">
+              <div className="text-eyebrow opacity-80 mb-1">NOW AT — TAP FOR DETAILS</div>
+              <div className="font-display text-2xl uppercase leading-none mb-1">{currentBar.name}</div>
+              {(() => {
+                const beers = (currentBar.drinks ?? []).filter(d => /pint|beer|lager|guinness|harp|tennent|stella|ipa/i.test(d.name));
+                const cheapest = beers.reduce<typeof beers[0] | null>((m, d) => !m || d.price < m.price ? d : m, null);
+                return cheapest ? <div className="text-meta opacity-80">{cheapest.name.toUpperCase()} · {formatPrice(cheapest.price, currency)}</div> : null;
+              })()}
+              <div className="flex items-center gap-1 mt-2 text-eyebrow opacity-60">MORE INFO <ChevronRight size={11} /></div>
+            </Link>
+          )}
 
-          {/* Maps buttons */}
           <MapsButtons stops={stopBars} compact />
 
-          {/* Route list */}
           <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">YOUR ROUTE</div>
           <ul className="mb-4">
             {stopBars.map((bar, i) => (
-              <li key={bar.id} className="flex items-center gap-3 hairline-b-soft py-2.5">
-                <span className={`num-rail w-6 text-eyebrow ${i < currentStopIdx ? "text-[var(--color-verified)]" : i === currentStopIdx ? "text-[var(--color-blaze)]" : "text-[var(--color-paper)] opacity-40"}`}>
-                  {i < currentStopIdx ? "✓" : String(i + 1).padStart(2, "0")}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className={`font-display text-sm uppercase truncate ${i < currentStopIdx ? "text-[var(--color-paper)] opacity-40" : "text-[var(--color-paper)]"}`}>
-                    {bar.name}
+              <li key={bar.id}>
+                <Link to={`/bar/${bar.id}`} className="flex items-center gap-3 hairline-b-soft py-3">
+                  <span className={`num-rail w-6 text-eyebrow shrink-0 ${i < currentStopIdx ? "text-[var(--color-verified)]" : i === currentStopIdx ? "text-[var(--color-blaze)]" : "text-[var(--color-paper)] opacity-40"}`}>
+                    {i < currentStopIdx ? "✓" : String(i + 1).padStart(2, "0")}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-display text-sm uppercase truncate ${i < currentStopIdx ? "text-[var(--color-paper)] opacity-40" : "text-[var(--color-paper)]"}`}>{bar.name}</div>
+                    {i > currentStopIdx && (
+                      <div className="text-meta opacity-50">
+                        {i === currentStopIdx + 1 ? `${haversineKm(stopBars[currentStopIdx], bar).toFixed(1)} KM` : bar.area?.toUpperCase()}
+                      </div>
+                    )}
                   </div>
-                  {i > currentStopIdx && (
-                    <div className="text-meta opacity-50">
-                      {i === currentStopIdx + 1 ? `${haversineKm(stopBars[currentStopIdx], bar).toFixed(1)} KM` : bar.area?.toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                {i === currentStopIdx + 1 && (() => {
-                  const beers = (bar.drinks ?? []).filter(d => /pint|beer|lager|guinness|harp|tennent|stella|ipa/i.test(d.name));
-                  const cheapest = beers.reduce<typeof beers[0] | null>((min, d) => !min || d.price < min.price ? d : min, null);
-                  return cheapest ? <div className="font-display text-base text-[var(--color-sun)]">{formatPrice(cheapest.price, currency)}</div> : null;
-                })()}
+                  {i === currentStopIdx + 1 && (() => {
+                    const beers = (bar.drinks ?? []).filter(d => /pint|beer|lager|guinness|harp|tennent|stella|ipa/i.test(d.name));
+                    const cheapest = beers.reduce<typeof beers[0] | null>((m, d) => !m || d.price < m.price ? d : m, null);
+                    return cheapest ? <div className="font-display text-base text-[var(--color-sun)] shrink-0">{formatPrice(cheapest.price, currency)}</div> : null;
+                  })()}
+                  <ChevronRight size={12} className="opacity-30 shrink-0" />
+                </Link>
               </li>
             ))}
           </ul>
@@ -684,15 +616,10 @@ export default function CrawlPage() {
 
         <div className="px-4 pb-6">
           {isGuest ? (
-            <div className="border border-[var(--color-rule)] text-center py-3 text-meta opacity-60">
-              WAITING FOR HOST TO ADVANCE…
-            </div>
+            <div className="border border-[var(--color-rule)] text-center py-3 text-meta opacity-60">WAITING FOR HOST TO ADVANCE…</div>
           ) : (
-            <button
-              onClick={handleAdvance}
-              disabled={advanceMut.isPending || endGroupMut.isPending}
-              className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider"
-            >
+            <button onClick={handleAdvance} disabled={advanceMut.isPending || endGroupMut.isPending}
+              className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
               {isLastStop ? "FINISH CRAWL ✓" : `NEXT STOP → ${nextBar?.name.toUpperCase()}`}
             </button>
           )}
@@ -702,83 +629,70 @@ export default function CrawlPage() {
     );
   }
 
-  /* DONE VIEW */
-  if (view === "done") {
-    return (
-      <div className="grain-ink max-w-md mx-auto">
-        <section className="px-4 pt-6 pb-4">
-          <div className="text-eyebrow text-[var(--color-verified)] mb-2">CRAWL COMPLETE</div>
-          <h1 className="text-hero text-[var(--color-paper)] mb-1">
-            WELL<br/><span className="text-[var(--color-blaze)]">DONE</span>
-          </h1>
-          <div className="text-eyebrow opacity-50 mb-6">{stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} KM WALKED</div>
-          <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">RECAP</div>
-          {stopBars.map((bar, i) => <StopRow key={bar.id} bar={bar} idx={i} currency={currency} done />)}
-        </section>
-        <div className="px-4 pb-6 flex flex-col gap-2">
-          <button onClick={() => { setDraft(EMPTY_DRAFT); setActiveStopIdx(0); setView("building"); }} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
-            BUILD ANOTHER CRAWL →
-          </button>
-          <button onClick={reset} className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-sm py-2.5 tracking-wider hover:border-[var(--color-blaze)]">
-            BACK TO CRAWLS
-          </button>
-        </div>
+  /* DONE */
+  if (view === "done") return (
+    <div className="grain-ink max-w-md mx-auto">
+      <section className="px-4 pt-6 pb-4">
+        <div className="text-eyebrow text-[var(--color-verified)] mb-2">CRAWL COMPLETE</div>
+        <h1 className="text-hero text-[var(--color-paper)] mb-1">WELL<br/><span className="text-[var(--color-blaze)]">DONE</span></h1>
+        <div className="text-eyebrow opacity-50 mb-6">{stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} KM WALKED</div>
+        <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">RECAP</div>
+        {stopBars.map((b, i) => <StopRow key={b.id} bar={b} idx={i} currency={currency} done />)}
+      </section>
+      <div className="px-4 pb-6 flex flex-col gap-2">
+        <button onClick={() => { setDraft(EMPTY); setActiveStopIdx(0); setView("building"); }}
+          className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">BUILD ANOTHER CRAWL →</button>
+        <button onClick={reset} className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-sm py-2.5 tracking-wider hover:border-[var(--color-blaze)]">BACK TO CRAWLS</button>
       </div>
-    );
-  }
+    </div>
+  );
 
-  /* DISCOVER VIEW */
-  if (view === "discover") {
-    return (
-      <div className="grain-ink max-w-md mx-auto">
-        <section className="px-4 pt-6 pb-4">
-          <div className="text-eyebrow text-[var(--color-blaze)] mb-2">DISPATCH 04 · DISCOVER</div>
-          <h1 className="text-hero text-[var(--color-paper)] mb-6">COMMUNITY<br/><span className="text-[var(--color-blaze)]">CRAWLS</span></h1>
-          {!publishedCrawls || publishedCrawls.length === 0 ? (
-            <div className="py-12 text-center text-meta opacity-50">
-              <MapPin size={24} className="mx-auto mb-3 opacity-30" />
-              No community crawls yet. Build one and submit it.
-            </div>
-          ) : (
-            <ul>
-              {publishedCrawls.map((crawl, i) => {
-                const barIds = JSON.parse(crawl.barIds) as number[];
-                const crawlBars = barIds.map(id => allBars.find(b => b.id === id)).filter(Boolean) as typeof allBars;
-                const cs = crawlStats(crawlBars);
-                return (
-                  <li key={crawl.id} className="hairline-b-soft py-3">
-                    <div className="flex items-start gap-3">
-                      <span className="num-rail text-[var(--color-blaze)] w-6 text-eyebrow">{String(i + 1).padStart(2, "0")}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-display text-base uppercase text-[var(--color-paper)]">{crawl.name}</div>
-                        <div className="text-meta opacity-50 mt-0.5">
-                          {barIds.length} STOPS · {cs.distanceKm.toFixed(1)} KM
-                          {crawl.authorName ? ` · BY ${crawl.authorName.toUpperCase()}` : ""}
-                        </div>
-                        {crawl.description && <div className="text-meta opacity-50 mt-0.5 truncate">{crawl.description}</div>}
+  /* DISCOVER */
+  if (view === "discover") return (
+    <div className="grain-ink max-w-md mx-auto">
+      <section className="px-4 pt-6 pb-4">
+        <div className="text-eyebrow text-[var(--color-blaze)] mb-2">DISPATCH 04 · DISCOVER</div>
+        <h1 className="text-hero text-[var(--color-paper)] mb-6">COMMUNITY<br/><span className="text-[var(--color-blaze)]">CRAWLS</span></h1>
+        {!publishedCrawls || publishedCrawls.length === 0 ? (
+          <div className="py-16 text-center">
+            <MapPin size={28} className="mx-auto mb-4 opacity-20" />
+            <div className="text-meta opacity-50">No community crawls yet.</div>
+            <div className="text-meta opacity-40">Be the first — build one and submit it.</div>
+          </div>
+        ) : (
+          <ul>
+            {publishedCrawls.map((crawl, i) => {
+              const barIds = JSON.parse(crawl.barIds) as number[];
+              const crawlBars = barIds.map(id => allBars.find(b => b.id === id)).filter(Boolean) as typeof allBars;
+              const cs = crawlStats(crawlBars);
+              return (
+                <li key={crawl.id} className="hairline-b-soft py-3">
+                  <div className="flex items-start gap-3">
+                    <span className="num-rail text-[var(--color-blaze)] w-6 text-eyebrow">{String(i + 1).padStart(2, "0")}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display text-base uppercase text-[var(--color-paper)]">{crawl.name}</div>
+                      <div className="text-meta opacity-50 mt-0.5">
+                        {barIds.length} STOPS · {cs.distanceKm.toFixed(1)} KM{crawl.authorName ? ` · BY ${crawl.authorName.toUpperCase()}` : ""}
                       </div>
-                      <button
-                        onClick={() => navigate(`/crawl/c/${crawl.shareCode}`)}
-                        className="text-eyebrow text-[var(--color-blaze)] flex items-center gap-0.5 shrink-0"
-                      >
-                        VIEW <ChevronRight size={12} />
-                      </button>
+                      {crawl.description && <div className="text-meta opacity-50 mt-0.5 truncate">{crawl.description}</div>}
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-        <div className="px-4 pb-6 flex flex-col gap-2">
-          <button onClick={() => setView("building")} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
-            BUILD YOUR OWN →
-          </button>
-          <button onClick={() => setView("landing")} className="text-meta opacity-50 py-2 text-center">← BACK</button>
-        </div>
+                    <button onClick={() => navigate(`/crawl/c/${crawl.shareCode}`)}
+                      className="text-eyebrow text-[var(--color-blaze)] flex items-center gap-0.5 shrink-0">
+                      VIEW <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+      <div className="px-4 pb-6 flex flex-col gap-2">
+        <button onClick={() => setView("building")} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">BUILD YOUR OWN →</button>
+        <button onClick={() => setView("landing")} className="text-meta opacity-50 py-2 text-center">← BACK</button>
       </div>
-    );
-  }
+    </div>
+  );
 
   return null;
 }
@@ -790,7 +704,7 @@ function StopRow({ bar, idx, currency, done }: {
   idx: number; currency: string; done?: boolean;
 }) {
   const beers = (bar.drinks ?? []).filter(d => /pint|beer|lager|guinness|harp|tennent|stella|ipa/i.test(d.name));
-  const cheapest = beers.reduce<typeof beers[0] | null>((min, d) => !min || d.price < min.price ? d : min, null);
+  const cheapest = beers.reduce<typeof beers[0] | null>((m, d) => !m || d.price < m.price ? d : m, null);
   return (
     <div className="flex items-center gap-3 hairline-b-soft py-2.5">
       <span className={`num-rail w-6 text-eyebrow ${done ? "text-[var(--color-verified)]" : "text-[var(--color-blaze)]"}`}>
@@ -800,45 +714,23 @@ function StopRow({ bar, idx, currency, done }: {
         <div className="font-display text-sm uppercase truncate text-[var(--color-paper)]">{bar.name}</div>
         <div className="text-meta opacity-50">{bar.area?.toUpperCase()}</div>
       </div>
-      {cheapest && (
-        <div className="font-display text-base text-[var(--color-sun)]">{formatPrice(cheapest.price, currency)}</div>
-      )}
+      {cheapest && <div className="font-display text-base text-[var(--color-sun)]">{formatPrice(cheapest.price, currency)}</div>}
     </div>
   );
 }
 
-function MapsButtons({ stops, compact }: {
-  stops: Array<{ lat: number; lng: number; name: string }>;
-  compact?: boolean;
-}) {
+function MapsButtons({ stops, compact }: { stops: Array<{ name: string; lat: number; lng: number }>; compact?: boolean }) {
   if (stops.length < 2) return null;
-  const googleUrl = buildGoogleMapsUrl(stops);
-  const appleUrl = buildAppleMapsUrl(stops);
-  const overLimit = stops.length > 10;
-
   return (
     <div className={`flex gap-2 ${compact ? "mb-3" : "mb-4"}`}>
-      <a
-        href={googleUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex-1 border border-[var(--color-rule)] text-[var(--color-paper)] text-eyebrow py-2.5 text-center hover:border-[var(--color-blaze)] flex items-center justify-center gap-1.5"
-      >
-        <MapPin size={12} aria-hidden /> GOOGLE MAPS
+      <a href={buildGoogleMapsUrl(stops)} target="_blank" rel="noopener noreferrer"
+        className="flex-1 border border-[var(--color-rule)] text-[var(--color-paper)] text-eyebrow py-2.5 text-center hover:border-[var(--color-blaze)] flex items-center justify-center gap-1.5">
+        <MapPin size={12} aria-hidden />GOOGLE MAPS
       </a>
-      <a
-        href={appleUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex-1 border border-[var(--color-rule)] text-[var(--color-paper)] text-eyebrow py-2.5 text-center hover:border-[var(--color-blaze)] flex items-center justify-center gap-1.5"
-      >
-        <MapPin size={12} aria-hidden /> APPLE MAPS
+      <a href={buildAppleMapsUrl(stops)} target="_blank" rel="noopener noreferrer"
+        className="flex-1 border border-[var(--color-rule)] text-[var(--color-paper)] text-eyebrow py-2.5 text-center hover:border-[var(--color-blaze)] flex items-center justify-center gap-1.5">
+        <MapPin size={12} aria-hidden />APPLE MAPS
       </a>
-      {overLimit && (
-        <div className="w-full text-meta opacity-40 text-center -mt-2 pb-1">
-          Google Maps shows first 10 stops only
-        </div>
-      )}
     </div>
   );
 }

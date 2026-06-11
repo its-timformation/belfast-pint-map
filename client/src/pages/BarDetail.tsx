@@ -39,7 +39,7 @@ export default function BarDetail() {
   const share = async () => {
     const url = window.location.href;
     if (navigator.share) {
-      try { await navigator.share({ title: bar.name, text: `${bar.name} on Pints du Soleil`, url }); }
+      try { await navigator.share({ title: bar.name, text: `${bar.name} on Belfast Pint Map`, url }); }
       catch {}
     } else {
       try { await navigator.clipboard.writeText(url); } catch {}
