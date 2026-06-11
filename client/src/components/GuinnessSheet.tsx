@@ -111,7 +111,7 @@ export function GuinnessSheet({ open, onClose, userLocation }: Props) {
   const nearbyGuinnessBars = useMemo(() => {
     if (!allBars) return [];
     const guinnessBars = allBars.filter(b => b.servesGuinness);
-    const center = userLocation || { lat: 46.1893, lng: 6.7741 };
+    const center = userLocation || { lat: 54.5973, lng: -5.9301 };
     return guinnessBars
       .map(b => {
         const g = (b.drinks ?? []).find(d =>
@@ -180,7 +180,7 @@ export function GuinnessSheet({ open, onClose, userLocation }: Props) {
         </div>
 
         {/* Bar list — NO overflow scroll, content just renders */}
-        <div className="flex-1 pointer-events-none overflow-hidden">
+        <div className="flex-1 overflow-hidden overflow-y-auto">
           {isLoading ? (
             <LoadingMessage surface="guinness" />
           ) : nearbyGuinnessBars.length === 0 ? (

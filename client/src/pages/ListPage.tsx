@@ -119,7 +119,7 @@ export default function ListPage() {
     <div className="grain-ink max-w-md mx-auto">
       <section className="px-4 pt-5 pb-3">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DIRECTORY · {(barsWithDetails?.length ?? 0).toString().padStart(2,"0")} BARS</div>
-        <h1 className="text-headline">EVERY BAR<br/>IN<br/>BELFAST</h1>
+        <h1 className="text-headline">EVERY BAR<br/>IN THE CITY</h1>
       </section>
 
       {/* Typeahead search with filter chips */}

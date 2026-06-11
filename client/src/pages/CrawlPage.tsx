@@ -114,6 +114,9 @@ export default function CrawlPage() {
   // Drag state
   const [dragIdx, setDragIdx]               = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx]       = useState<number | null>(null);
+  // Builder UI state
+  const [showAreaPicker, setShowAreaPicker] = useState(false);
+  const [codeCopied, setCodeCopied]         = useState(false);
 
   useEffect(() => { localStorage.setItem(CRAWL_DRAFT_KEY, JSON.stringify(draft)); }, [draft]);
 
@@ -199,12 +202,12 @@ export default function CrawlPage() {
     setSelectedAreas(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
   }
 
-  async function handleGenerate(preset: Preset) {
+  async function handleGenerate(preset: Preset, areaOverride?: string) {
     setGenError("");
     try {
       const result = await generateMut.mutateAsync({
         preset,
-        area: preset === "area" ? selectedAreas[0] : undefined,
+        area: preset === "area" ? (areaOverride ?? selectedAreas[0]) : undefined,
         maxStops: 6,
       });
       setDraft(d => ({ ...d, barIds: result.barIds, name: d.name || result.name, tags: result.tags, generatedBy: "auto" }));
@@ -343,8 +346,8 @@ export default function CrawlPage() {
           <div className="flex gap-2 mb-8">
             {[
               { label: "BARS",    value: String(allBars.length).padStart(2,"0") },
-              { label: "GUINNESS",value: String(allBars.filter(b=>b.servesGuinness).length).padStart(2,"0") },
               { label: "AREAS",   value: String(areas.length).padStart(2,"0") },
+              { label: "IN DRAFT",value: String(draft.barIds.length).padStart(2,"0") },
             ].map(s => (
               <div key={s.label} className="flex-1 border border-[var(--color-rule)] px-2.5 py-2.5">
                 <div className="text-eyebrow opacity-50">{s.label}</div>
@@ -401,6 +404,42 @@ export default function CrawlPage() {
           className="w-full bg-transparent border-b border-[var(--color-rule)] text-[var(--color-paper)] text-meta py-2 mb-6 focus:outline-none focus:border-[var(--color-blaze)] placeholder:opacity-30 resize-none"
         />
 
+        {/* Auto-generate — above stop list, single horizontal scroll row */}
+        <div className="mb-6">
+          <div className="flex items-baseline justify-between mb-2">
+            <div className="font-display text-base text-[var(--color-paper)]">AUTO-GENERATE</div>
+            <div className="text-eyebrow opacity-40">OPTIONAL</div>
+          </div>
+          <div className="overflow-x-auto -mx-4 px-4">
+            <div className="flex gap-2 pb-2" style={{ width: "max-content" }}>
+              {PRESETS.map(p => (
+                <button key={p.id} onClick={() => handleGenerate(p.id)} disabled={generateMut.isPending}
+                  className="text-eyebrow border border-[var(--color-rule)] text-[var(--color-paper)] px-3 py-2.5 hover:border-[var(--color-blaze)] hover:text-[var(--color-blaze)] disabled:opacity-40 transition-colors whitespace-nowrap">
+                  {p.label}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowAreaPicker(p => !p)}
+                disabled={generateMut.isPending}
+                className={`text-eyebrow border px-3 py-2.5 transition-colors whitespace-nowrap disabled:opacity-40 ${showAreaPicker ? "border-[var(--color-blaze)] text-[var(--color-blaze)]" : "border-[var(--color-rule)] text-[var(--color-paper)] hover:border-[var(--color-blaze)] hover:text-[var(--color-blaze)]"}`}>
+                BY AREA ▾
+              </button>
+            </div>
+          </div>
+          {showAreaPicker && (
+            <div className="flex flex-wrap gap-1.5 mt-1 mb-1">
+              {areas.map(a => (
+                <button key={a} onClick={() => { handleGenerate("area", a); setShowAreaPicker(false); }}
+                  disabled={generateMut.isPending}
+                  className="text-eyebrow px-2.5 py-2 border border-[var(--color-rule)] text-[var(--color-paper)] opacity-70 hover:border-[var(--color-blaze)] hover:opacity-100 transition-colors disabled:opacity-40">
+                  {a}
+                </button>
+              ))}
+            </div>
+          )}
+          {genError && <p className="text-meta text-[var(--color-blaze)] mt-2">{genError}</p>}
+        </div>
+
         {/* Search */}
         <div className="hairline-b pb-1.5 mb-3 font-display text-base text-[var(--color-paper)]">ADD STOPS</div>
         <div className="relative mb-5">
@@ -428,7 +467,7 @@ export default function CrawlPage() {
           )}
         </div>
 
-        {/* Stops list — draggable */}
+        {/* Stops list — draggable with improved visual */}
         {stopBars.length > 0 && (
           <>
             <div className="hairline-b pb-1.5 mb-2 flex items-baseline justify-between">
@@ -437,14 +476,18 @@ export default function CrawlPage() {
             </div>
             <ul className="mb-6">
               {stopBars.map((bar, i) => (
-                <li key={bar.id} draggable
-                  onDragStart={() => setDragIdx(i)}
-                  onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                <li key={bar.id}
+                  draggable
+                  onDragStart={e => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverIdx(i); }}
                   onDrop={() => handleDrop(i)}
                   onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
-                  className={`flex items-center gap-1 hairline-b-soft transition-opacity ${dragIdx === i ? "opacity-40" : ""} ${dragOverIdx === i && dragIdx !== i ? "border-l-2 border-[var(--color-blaze)] pl-1" : ""}`}
+                  className={`relative flex items-center gap-1 hairline-b-soft transition-opacity duration-100 ${dragIdx === i ? "opacity-25" : "opacity-100"}`}
                 >
-                  <div className="cursor-grab flex items-center justify-center w-11 h-11 opacity-25 hover:opacity-60 shrink-0">
+                  {dragOverIdx === i && dragIdx !== i && (
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-[var(--color-blaze)]" />
+                  )}
+                  <div className="cursor-grab active:cursor-grabbing flex items-center justify-center w-11 h-11 opacity-25 hover:opacity-70 shrink-0 touch-none">
                     <GripVertical size={16} />
                   </div>
                   <span className="text-eyebrow text-[var(--color-blaze)] w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
@@ -463,43 +506,7 @@ export default function CrawlPage() {
           </>
         )}
 
-        {/* Auto-generate — clearly optional */}
-        <div className="hairline-t pt-5">
-          <div className="flex items-baseline justify-between mb-1">
-            <div className="font-display text-base text-[var(--color-paper)]">AUTO-GENERATE</div>
-            <div className="text-eyebrow opacity-40">OPTIONAL</div>
-          </div>
-          <p className="text-meta opacity-50 mb-3">Pick a preset and we'll build the route for you.</p>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {PRESETS.map(p => (
-              <button key={p.id} onClick={() => handleGenerate(p.id)} disabled={generateMut.isPending}
-                className="text-eyebrow border border-[var(--color-rule)] text-[var(--color-paper)] px-3 py-2 hover:border-[var(--color-blaze)] hover:text-[var(--color-blaze)] disabled:opacity-40 transition-colors">
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div className="text-eyebrow opacity-50 mb-2">AREA CRAWL</div>
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            <button onClick={() => setSelectedAreas([])}
-              className={`text-eyebrow px-2.5 py-2 border transition-colors ${selectedAreas.length === 0 ? "bg-[var(--color-blaze)] border-[var(--color-blaze)] text-[var(--color-paper)]" : "border-[var(--color-rule)] text-[var(--color-paper)] opacity-60"}`}>
-              ALL
-            </button>
-            {areas.map(a => (
-              <button key={a} onClick={() => toggleArea(a)}
-                className={`text-eyebrow px-2.5 py-2 border transition-colors ${selectedAreas.includes(a) ? "bg-[var(--color-blaze)] border-[var(--color-blaze)] text-[var(--color-paper)]" : "border-[var(--color-rule)] text-[var(--color-paper)] opacity-60"}`}>
-                {a}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => { if (selectedAreas.length > 0) handleGenerate("area"); }}
-            disabled={selectedAreas.length === 0 || generateMut.isPending}
-            className="text-eyebrow border border-[var(--color-rule)] text-[var(--color-paper)] px-3 py-2 hover:border-[var(--color-blaze)] disabled:opacity-40">
-            GENERATE AREA CRAWL
-          </button>
-          {genError && <p className="text-meta text-[var(--color-blaze)] mt-2">{genError}</p>}
-        </div>
-
-        <div className="mt-6">
+        <div className="mt-2">
           <button onClick={handleSave} disabled={draft.barIds.length < 2 || !draft.name.trim() || createMut.isPending}
             className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider disabled:opacity-40 mb-2">
             {createMut.isPending ? "SAVING..." : "SAVE & SHARE →"}
@@ -561,10 +568,14 @@ export default function CrawlPage() {
           {groupCode && (
             <div className="flex items-center gap-3 mb-3 flex-wrap">
               <div className="flex items-center gap-1.5 text-eyebrow opacity-60"><Users size={12} />{participants} {participants === 1 ? "PERSON" : "PEOPLE"}</div>
-              <div className="flex items-center gap-2 border border-[var(--color-rule)] px-2.5 py-1.5">
+              <button
+                onClick={() => { navigator.clipboard?.writeText(groupCode!).catch(() => {}); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }}
+                className="flex items-center gap-2 border border-[var(--color-rule)] px-2.5 py-1.5 hover:border-[var(--color-blaze)] transition-colors"
+              >
                 <span className="text-eyebrow opacity-50">CODE</span>
                 <span className="font-mono text-sm text-[var(--color-paper)] tracking-widest">{groupCode}</span>
-              </div>
+                <span className={`text-eyebrow transition-colors ${codeCopied ? "text-[var(--color-verified)] opacity-100" : "opacity-40"}`}>{codeCopied ? "✓" : "COPY"}</span>
+              </button>
               <button onClick={() => shareGroup(draft.name, groupCode)}
                 className="flex items-center gap-1.5 text-eyebrow opacity-60 hover:opacity-100"><Share2 size={13} /> INVITE</button>
             </div>

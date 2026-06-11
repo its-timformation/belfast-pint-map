@@ -98,13 +98,13 @@ export default function Dashboard() {
       {/* Hero */}
       <section className="px-4 pt-6 pb-5">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DISPATCH 01 · {localArea.toUpperCase()}</div>
-        <h1 className="text-hero text-[var(--color-paper)]">
+        <h1 className="text-hero text-[var(--color-paper)]" style={{ fontSize: 'clamp(2.4rem, 9vw, 4.5rem)' }}>
           FIND THE<br/>
           {stoutsMode ? <>BEST <span style={{color:"var(--color-paper)"}}>STOUT</span> IN</> : <>CHEAPEST<br/><span className="text-[var(--color-blaze)]">PINT</span> IN</>}<br/>
           BELFAST
         </h1>
 
-        {/* Status bar — temp, bars */}
+        {/* Status bar — temp, bars, deals */}
         <div className="mt-5 flex gap-2">
           <div className="flex-1 border border-[var(--color-rule)] px-2.5 py-2">
             <div className="text-eyebrow opacity-60">TEMP</div>
@@ -116,6 +116,12 @@ export default function Dashboard() {
             <div className="text-eyebrow opacity-60">BARS</div>
             <div className="font-display text-xl mt-0.5 text-[var(--color-paper)]">
               {(barsWithDetails?.length ?? 0).toString().padStart(2, "0")}
+            </div>
+          </div>
+          <div className="flex-1 border border-[var(--color-rule)] px-2.5 py-2">
+            <div className="text-eyebrow opacity-60">DEALS</div>
+            <div className={`font-display text-xl mt-0.5 ${activeDeals.length > 0 ? "text-[var(--color-sun)]" : "text-[var(--color-paper)]"}`}>
+              {activeDeals.length.toString().padStart(2, "0")}
             </div>
           </div>
         </div>
