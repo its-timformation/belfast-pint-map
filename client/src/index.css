@@ -57,6 +57,32 @@
   }
 }
 
+/* ── Belfast Stout Map easter-egg theme ─────────────────────── */
+.stouts-mode {
+  --color-ink:          #0E0500;   /* deep stout-black */
+  --color-ink-soft:     #1A0A01;
+  --color-ink-card:     #221002;
+  --color-paper:        #FFF3CC;   /* Guinness cream */
+  --color-paper-soft:   #EDE1A8;
+  --color-paper-warm:   #FFF0C0;
+  --color-blaze:        #C9A227;   /* Guinness harp gold */
+  --color-blaze-soft:   #D9B840;
+  --color-blaze-deep:   #A07D18;
+  --color-accent:       #C9A227;
+  --color-accent-hover: #D9B840;
+  --color-sun:          #EAC85A;
+  --color-frost:        #9B7B50;
+  --color-rule:         rgba(255, 243, 204, 0.14);
+  --color-rule-soft:    rgba(255, 243, 204, 0.08);
+  --color-rule-paper:   rgba(14, 5, 0, 0.18);
+}
+
+@keyframes bubble-rise {
+  0%   { transform: translateY(0) scale(1);   opacity: 0.7; }
+  80%  { opacity: 0.4; }
+  100% { transform: translateY(-110vh) scale(0.5); opacity: 0; }
+}
+
 @layer utilities {
   .font-display { font-family: var(--font-display); }
   .font-mono   { font-family: var(--font-mono); }

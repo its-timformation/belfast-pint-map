@@ -90,7 +90,7 @@ export default function LiveNow() {
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">
           LIVE · {activeDeals.length.toString().padStart(2, '0')} ACTIVE
         </div>
-        <h1 className="text-headline">LIVE<br/>NOW</h1>
+        <h1 className="text-headline">LIVE NOW</h1>
       </section>
 
       {activeDeals.length === 0 ? (

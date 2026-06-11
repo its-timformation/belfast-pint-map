@@ -10,7 +10,6 @@ export default function Dashboard() {
   const { currency, stoutsMode } = useAppStore();
   const { data: barsWithDetails, isLoading } = trpc.bars.getAllWithDetails.useQuery();
   const { data: deals } = trpc.bars.getDeals.useQuery();
-  const { data: resort } = trpc.resort.getCondition.useQuery();
 
   const [userLocation, setUserLocation] = useState<{lat:number;lng:number} | null>(null);
   const [guinnessOpen, setGuinnessOpen] = useState(false);
@@ -85,6 +84,8 @@ export default function Dashboard() {
     });
   }, [deals]);
 
+  const openNow = useMemo(() => enriched.filter(b => b.openState.open).length, [enriched]);
+
   const localArea = userLocation
     ? (enriched[0]?.area || "Belfast")
     : "Belfast";
@@ -99,17 +100,18 @@ export default function Dashboard() {
       <section className="px-4 pt-6 pb-5">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DISPATCH 01 · {localArea.toUpperCase()}</div>
         <h1 className="text-hero text-[var(--color-paper)]" style={{ fontSize: 'clamp(2.4rem, 9vw, 4.5rem)' }}>
-          FIND THE<br/>
-          {stoutsMode ? <>BEST <span style={{color:"var(--color-paper)"}}>STOUT</span> IN</> : <>CHEAPEST<br/><span className="text-[var(--color-blaze)]">PINT</span> IN</>}<br/>
-          BELFAST
+          {stoutsMode
+            ? <>THE BEST STOUT<br/>IN BELFAST</>
+            : <>THE CHEAPEST<br/><span className="text-[var(--color-blaze)]">PINT</span> IN BELFAST</>
+          }
         </h1>
 
-        {/* Status bar — temp, bars, deals */}
+        {/* Status bar — open now, bars, deals */}
         <div className="mt-5 flex gap-2">
           <div className="flex-1 border border-[var(--color-rule)] px-2.5 py-2">
-            <div className="text-eyebrow opacity-60">TEMP</div>
-            <div className="font-display text-xl mt-0.5 text-[var(--color-frost)]">
-              {resort?.temp != null ? `${resort.temp}°` : "—"}
+            <div className="text-eyebrow opacity-60">OPEN</div>
+            <div className={`font-display text-xl mt-0.5 ${openNow > 0 ? "text-[var(--color-verified)]" : "text-[var(--color-paper)]"}`}>
+              {openNow.toString().padStart(2, "0")}
             </div>
           </div>
           <div className="flex-1 border border-[var(--color-rule)] px-2.5 py-2">

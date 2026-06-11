@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "./lib/store";
 import { APP_VERSION } from './lib/version';
 import { PinSentry } from "./components/PinSentry";
@@ -86,6 +86,52 @@ function LiveCrawlBanner() {
   );
 }
 
+/* ── Stouts bubbles animation ──────────────────────────────── */
+function StoutsBubbles({ active }: { active: boolean }) {
+  const [show, setShow] = useState(false);
+  const wasActive = useRef(false);
+  const bubbles = useRef<Array<{ id: number; left: number; size: number; delay: number; dur: number }>>([]);
+
+  useEffect(() => {
+    if (active && !wasActive.current) {
+      bubbles.current = Array.from({ length: 28 }, (_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        size: 5 + Math.random() * 14,
+        delay: Math.random() * 1.4,
+        dur:   1.6 + Math.random() * 1.6,
+      }));
+      setShow(true);
+      const t = setTimeout(() => setShow(false), 4000);
+      wasActive.current = true;
+      return () => clearTimeout(t);
+    }
+    if (!active) wasActive.current = false;
+  }, [active]);
+
+  if (!show) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, pointerEvents: "none", overflow: "hidden" }}>
+      {bubbles.current.map(b => (
+        <div
+          key={b.id}
+          style={{
+            position: "absolute",
+            bottom: "-24px",
+            left: `${b.left}%`,
+            width:  b.size,
+            height: b.size,
+            borderRadius: "50%",
+            border: "1.5px solid rgba(201,162,39,0.65)",
+            background: "rgba(201,162,39,0.18)",
+            animation: `bubble-rise ${b.dur}s ease-out ${b.delay}s both`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /* ── Ticker ────────────────────────────────────────────────── */
 function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdminTap: () => void }) {
   const location = useLocation();
@@ -123,7 +169,10 @@ function Header({ onWordmarkTap }: { onWordmarkTap: () => void }) {
       <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
         <button onClick={() => { onWordmarkTap(); navigate("/"); }} aria-label="Belfast Pint Map home">
           <span className="font-display text-xl uppercase leading-none text-[var(--color-paper)] tracking-wide">
-            {stoutsMode ? "STOUTS" : "BELFAST"}<span className="text-[var(--color-blaze)]">·</span>PINT<span className="text-[var(--color-blaze)]">·</span>MAP
+            {stoutsMode
+              ? <>BELFAST<span className="text-[var(--color-blaze)]">·</span>STOUT<span className="text-[var(--color-blaze)]">·</span>MAP</>
+              : <>BELFAST<span className="text-[var(--color-blaze)]">·</span>PINT<span className="text-[var(--color-blaze)]">·</span>MAP</>
+            }
           </span>
         </button>
         <select value={currency} onChange={e => setCurrency(e.target.value as any)}
@@ -220,6 +269,11 @@ function Shell() {
     return () => clearTimeout(id);
   }, [stoutsMode, stoutsExpires, exitStoutsMode]);
 
+  // Toggle stouts-mode CSS class for global gold accent theming
+  useEffect(() => {
+    document.documentElement.classList.toggle("stouts-mode", stoutsMode);
+  }, [stoutsMode]);
+
   const onAdminTap = () => { if (adminActive) navigate("/admin"); else setShowSentry(true); };
   const onUnlock   = (token: string) => {
     setAdminSession();
@@ -284,6 +338,7 @@ function Shell() {
         <div className="fixed bottom-0 left-0 right-0 z-50"><BottomNav /></div>
       )}
 
+      <StoutsBubbles active={stoutsMode} />
       {showSentry && <PinSentry onUnlock={onUnlock} onCancel={() => setShowSentry(false)} />}
       <BuildNotification isAdmin={adminActive} />
     </>
