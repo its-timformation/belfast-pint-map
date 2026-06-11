@@ -205,11 +205,10 @@ function BottomNav() {
       </svg>
     )},
     { to: "/list", label: "Bars", icon: (
-      // Pint glass
+      // Pint glass — tapered body, flat rim, beer line
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M7 3h10l-2 16a2 2 0 01-2 2H11a2 2 0 01-2-2L7 3z"/>
-        <path d="M6 3h12"/>
-        <path d="M9 9h6"/>
+        <path d="M15.2 22H8.8a2 2 0 01-2-1.79L5 3h14l-1.81 17.21A2 2 0 0115.2 22z"/>
+        <path d="M7.5 8h9"/>
       </svg>
     )},
     { to: "/crawl", label: "Crawl", icon: (
