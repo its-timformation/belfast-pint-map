@@ -26,6 +26,18 @@ const PIN_DEAL       = makePin("#E63E0B", true);
 const PIN_FOCUS      = makePin("#F2C12E", false, 32);
 const PIN_FOCUS_DEAL = makePin("#F2C12E", true, 32);
 
+/* ── User location pin ─────────────────────────────────────── */
+const PIN_USER = L.divIcon({
+  html: `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 6px rgba(0,0,0,0.7))">
+    <circle cx="14" cy="14" r="12" fill="#87B0D9" stroke="#FBF5E0" stroke-width="2"/>
+    <circle cx="14" cy="14" r="5" fill="#FBF5E0"/>
+    <circle cx="14" cy="14" r="12" fill="none" stroke="#87B0D9" stroke-width="1" opacity="0.4"/>
+  </svg>`,
+  className: "",
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+});
+
 /* ── Area cluster labels (visible zoom ≤ 11) ──────────────── */
 const AREA_CENTROIDS = [
   { name: "CATHEDRAL QUARTER", lat: 54.6007, lng: -5.9292 },
@@ -86,9 +98,19 @@ export default function MapPage() {
   const [params] = useSearchParams();
   const focusId = params.get("focus") ? Number(params.get("focus")) : undefined;
   const mapRef = useRef<L.Map | null>(null);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      p => setUserLocation([p.coords.latitude, p.coords.longitude]),
+      () => {},
+      { maximumAge: 5 * 60 * 1000, timeout: 6000 }
+    );
+  }, []);
 
   const center = useMemo<[number, number]>(() => {
-    if (!barsWithDetails?.length) return [46.20, 6.74];
+    if (!barsWithDetails?.length) return [54.5973, -5.9301];
     const avgLat = barsWithDetails.reduce((s, b) => s + b.lat, 0) / barsWithDetails.length;
     const avgLng = barsWithDetails.reduce((s, b) => s + b.lng, 0) / barsWithDetails.length;
     return [avgLat, avgLng];
@@ -125,6 +147,18 @@ export default function MapPage() {
           <MapReady onReady={m => { mapRef.current = m; }} />
           <FocusController focusId={focusId} bars={barsWithDetails ?? []} />
           <AreaLabels />
+
+          {/* User location pin */}
+          {userLocation && (
+            <Marker position={userLocation} icon={PIN_USER} zIndexOffset={1000}>
+              <Popup className="custom-popup" closeButton={false}>
+                <div className="p-3">
+                  <div className="text-eyebrow text-[var(--color-frost)] opacity-80 mb-1">YOUR LOCATION</div>
+                  <div className="font-display text-sm uppercase text-[var(--color-paper)]">YOU ARE HERE</div>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
           {(barsWithDetails ?? []).map(bar => {
             const isFocus = bar.id === focusId;
@@ -180,7 +214,7 @@ export default function MapPage() {
           })}
         </MapContainer>
 
-        {/* Custom zoom controls — top right */}
+        {/* Custom zoom + locate controls — top right */}
         <div className="absolute top-3 right-3 z-[400] flex flex-col border border-[var(--color-rule)]">
           <button
             onClick={() => mapRef.current?.zoomIn()}
@@ -189,9 +223,28 @@ export default function MapPage() {
           >+</button>
           <button
             onClick={() => mapRef.current?.zoomOut()}
-            className="bg-[var(--color-ink)] text-[var(--color-paper)] font-display text-xl w-10 h-10 flex items-center justify-center hover:bg-[var(--color-ink-card)] leading-none"
+            className="bg-[var(--color-ink)] text-[var(--color-paper)] font-display text-xl w-10 h-10 flex items-center justify-center hover:bg-[var(--color-ink-card)] border-b border-[var(--color-rule)] leading-none"
             aria-label="Zoom out"
           >−</button>
+          <button
+            onClick={() => {
+              if (userLocation) {
+                mapRef.current?.setView(userLocation, 15, { animate: true });
+              } else {
+                navigator.geolocation?.getCurrentPosition(
+                  p => { const ll: [number,number] = [p.coords.latitude, p.coords.longitude]; setUserLocation(ll); mapRef.current?.setView(ll, 15, { animate: true }); },
+                  () => {}
+                );
+              }
+            }}
+            className="bg-[var(--color-ink)] text-[var(--color-frost)] w-10 h-10 flex items-center justify-center hover:bg-[var(--color-ink-card)] leading-none"
+            aria-label="My location"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+            </svg>
+          </button>
         </div>
 
         {/* Legend — bottom left */}
@@ -215,6 +268,15 @@ export default function MapPage() {
             </svg>
             <span>FOCUSED</span>
           </div>
+          {userLocation && (
+            <div className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 14 14" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }}>
+                <circle cx="7" cy="7" r="6" fill="#87B0D9" stroke="#FBF5E0" strokeWidth="1"/>
+                <circle cx="7" cy="7" r="2.5" fill="#FBF5E0"/>
+              </svg>
+              <span>YOU</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

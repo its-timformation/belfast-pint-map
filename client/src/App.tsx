@@ -150,9 +150,9 @@ function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdmin
       <div className="max-w-md mx-auto px-4 py-2 flex items-center justify-between text-eyebrow opacity-70">
         <span>BELFAST</span>
         <span>{dateStr}</span>
-        <button onClick={onAdminTap} className="!min-h-0 px-1 -mx-1 hover:opacity-100 transition-opacity" aria-label="Editorial volume marker">
+        <button onClick={onAdminTap} className="!min-h-0 px-1 -mx-1 hover:opacity-100 transition-opacity" aria-label="Version / admin">
           <span className={adminActive ? "text-[var(--color-blaze)] opacity-100" : ""}>
-            {adminActive ? `v${APP_VERSION}` : (pageLabel || 'VOL.01')}
+            v{APP_VERSION}
           </span>
         </button>
       </div>

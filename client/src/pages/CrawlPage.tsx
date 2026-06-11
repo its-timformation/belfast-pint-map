@@ -141,7 +141,7 @@ export default function CrawlPage() {
   const { data: sharedCrawl, isLoading: sharedLoading } = trpc.crawls.getByShareCode.useQuery(
     { shareCode: params.code ?? "" }, { enabled: view === "shared" && !!params.code }
   );
-  const { data: publishedCrawls } = trpc.crawls.getPublished.useQuery(undefined, { enabled: view === "discover" });
+  const { data: publishedCrawls } = trpc.crawls.getPublished.useQuery(undefined, { enabled: view === "discover" || view === "landing" });
 
   const createMut     = trpc.crawls.create.useMutation();
   const generateMut   = trpc.crawls.generate.useMutation();
@@ -349,9 +349,22 @@ export default function CrawlPage() {
 
           <div className="flex gap-2 mb-6">
             {[
-              { label: "BARS",    value: String(allBars.length).padStart(2,"0") },
-              { label: "AREAS",   value: String(areas.length).padStart(2,"0") },
-              { label: "IN DRAFT",value: String(draft.barIds.length).padStart(2,"0") },
+              {
+                label: "CRAWLS",
+                value: String(publishedCrawls?.length ?? 0).padStart(2, "0"),
+              },
+              {
+                label: "AVG STOPS",
+                value: publishedCrawls?.length
+                  ? String(Math.round(publishedCrawls.reduce((s, c) => {
+                      try { return s + (JSON.parse(c.barIds) as number[]).length; } catch { return s; }
+                    }, 0) / publishedCrawls.length)).padStart(2, "0")
+                  : "—",
+              },
+              {
+                label: "GUINNESS",
+                value: String(allBars.filter(b => b.servesGuinness).length).padStart(2, "0"),
+              },
             ].map(s => (
               <div key={s.label} className="flex-1 border border-[var(--color-rule)] px-2.5 py-2.5">
                 <div className="text-eyebrow opacity-50">{s.label}</div>
