@@ -293,7 +293,7 @@ export default function CrawlPage() {
       <div className="grain-ink max-w-md mx-auto">
         <section className="px-4 pt-6 pb-4">
           <div className="text-eyebrow text-[var(--color-blaze)] mb-2">SHARED CRAWL</div>
-          <h1 className="text-hero text-[var(--color-paper)] mb-1">{sharedCrawl.name.toUpperCase()}</h1>
+          <h1 className="text-headline text-[var(--color-paper)] mb-1">{sharedCrawl.name.toUpperCase()}</h1>
           {sharedCrawl.description && <p className="text-meta opacity-60 mb-2">{sharedCrawl.description}</p>}
           <div className="text-eyebrow opacity-50">{sharedBars.length} STOPS · {ss.distanceKm.toFixed(1)} KM · ~{formatDuration(ss.durationMin)}</div>
         </section>
@@ -319,7 +319,7 @@ export default function CrawlPage() {
   if (view === "join") return (
     <div className="grain-ink max-w-md mx-auto px-4 pt-8 pb-6">
       <div className="text-eyebrow text-[var(--color-blaze)] mb-2">JOIN A GROUP CRAWL</div>
-      <h1 className="text-hero text-[var(--color-paper)] mb-8">ENTER<br/>GROUP<br/><span className="text-[var(--color-blaze)]">CODE</span></h1>
+      <h1 className="text-headline text-[var(--color-paper)] mb-8">ENTER GROUP<br/><span className="text-[var(--color-blaze)]">CODE</span></h1>
       <input value={joinInput} onChange={e => { setJoinInput(e.target.value.toUpperCase()); setGenError(""); }}
         placeholder="ABC123" maxLength={6}
         className="w-full bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-3xl text-center tracking-[0.3em] py-5 mb-4 focus:outline-none focus:border-[var(--color-blaze)]"
@@ -337,13 +337,17 @@ export default function CrawlPage() {
   if (view === "landing") {
     const hasDraft = draft.barIds.length > 0;
     return (
-      <div className="grain-ink max-w-md mx-auto">
-        <section className="px-4 pt-6 pb-8">
+      <div className="grain-ink max-w-md mx-auto flex flex-col"
+        style={{ minHeight: "calc(100dvh - var(--shell-top, 100px) - var(--shell-bottom, 60px))" }}>
+
+        {/* Top content */}
+        <section className="px-4 pt-6 flex-1">
           <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DISPATCH 04 · PUB CRAWLS</div>
-          <h1 className="text-hero text-[var(--color-paper)] mb-8">
-            EXPLORE<br/><span className="text-[var(--color-blaze)]">BELFAST</span><br/>YOUR WAY
+          <h1 className="text-headline text-[var(--color-paper)] mb-6">
+            EXPLORE BELFAST<br/><span className="text-[var(--color-blaze)]">YOUR WAY</span>
           </h1>
-          <div className="flex gap-2 mb-8">
+
+          <div className="flex gap-2 mb-6">
             {[
               { label: "BARS",    value: String(allBars.length).padStart(2,"0") },
               { label: "AREAS",   value: String(areas.length).padStart(2,"0") },
@@ -356,8 +360,26 @@ export default function CrawlPage() {
             ))}
           </div>
 
+          {/* JOIN GROUP — prominent at top */}
+          <div className="mb-5">
+            <div className="text-eyebrow opacity-50 mb-2">JOINING A GROUP?</div>
+            <div className="flex gap-2">
+              <input value={joinInput} onChange={e => { setJoinInput(e.target.value.toUpperCase()); setGenError(""); }}
+                placeholder="ENTER CODE" maxLength={6}
+                className="flex-1 bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-mono text-base px-3 py-3 tracking-[0.2em] focus:outline-none focus:border-[var(--color-blaze)]"
+              />
+              <button onClick={() => { if (joinInput.length === 6) handleJoinGroup(); }}
+                disabled={joinInput.length !== 6 || joinGroupMut.isPending}
+                className="bg-[var(--color-blaze)] text-[var(--color-paper)] px-5 font-display text-sm tracking-wider disabled:opacity-40">
+                {joinGroupMut.isPending ? "…" : "JOIN"}
+              </button>
+            </div>
+            {genError && <p className="text-meta text-[var(--color-blaze)] mt-2">{genError}</p>}
+          </div>
+
+          {/* Draft resume — shown inline if there's a draft */}
           {hasDraft && (
-            <div className="border border-[var(--color-rule)] p-3 mb-4">
+            <div className="border border-[var(--color-rule)] p-3 mb-2">
               <div className="text-eyebrow opacity-50 mb-1">DRAFT IN PROGRESS</div>
               <div className="font-display text-base uppercase text-[var(--color-paper)] mb-2">
                 {draft.name || "UNNAMED CRAWL"} · {draft.barIds.length} STOPS
@@ -368,24 +390,19 @@ export default function CrawlPage() {
               </div>
             </div>
           )}
-
-          <button onClick={() => setView("building")} className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider mb-3">BUILD A CRAWL →</button>
-          <button onClick={() => setView("discover")} className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider mb-8 hover:border-[var(--color-blaze)]">DISCOVER CRAWLS</button>
-
-          <div className="hairline-t pt-6">
-            <div className="text-eyebrow opacity-50 mb-3">JOINING A GROUP?</div>
-            <div className="flex gap-2">
-              <input value={joinInput} onChange={e => { setJoinInput(e.target.value.toUpperCase()); setGenError(""); }}
-                placeholder="ENTER CODE" maxLength={6}
-                className="flex-1 bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-mono text-base px-3 py-3 tracking-[0.2em] focus:outline-none focus:border-[var(--color-blaze)]"
-              />
-              <button onClick={() => { if (joinInput.length === 6) handleJoinGroup(); }}
-                disabled={joinInput.length !== 6 || joinGroupMut.isPending}
-                className="bg-[var(--color-blaze)] text-[var(--color-paper)] px-5 font-display text-sm tracking-wider disabled:opacity-40">JOIN</button>
-            </div>
-            {genError && <p className="text-meta text-[var(--color-blaze)] mt-2">{genError}</p>}
-          </div>
         </section>
+
+        {/* Build + Discover — pinned at bottom */}
+        <div className="px-4 pb-6 pt-4 flex flex-col gap-3">
+          <button onClick={() => setView("building")}
+            className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
+            BUILD A CRAWL →
+          </button>
+          <button onClick={() => setView("discover")}
+            className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider hover:border-[var(--color-blaze)]">
+            DISCOVER CRAWLS
+          </button>
+        </div>
       </div>
     );
   }
@@ -645,7 +662,7 @@ export default function CrawlPage() {
     <div className="grain-ink max-w-md mx-auto">
       <section className="px-4 pt-6 pb-4">
         <div className="text-eyebrow text-[var(--color-verified)] mb-2">CRAWL COMPLETE</div>
-        <h1 className="text-hero text-[var(--color-paper)] mb-1">WELL<br/><span className="text-[var(--color-blaze)]">DONE</span></h1>
+        <h1 className="text-headline text-[var(--color-paper)] mb-1">WELL<br/><span className="text-[var(--color-blaze)]">DONE</span></h1>
         <div className="text-eyebrow opacity-50 mb-6">{stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} KM WALKED</div>
         <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">RECAP</div>
         {stopBars.map((b, i) => <StopRow key={b.id} bar={b} idx={i} currency={currency} done />)}
@@ -663,7 +680,7 @@ export default function CrawlPage() {
     <div className="grain-ink max-w-md mx-auto">
       <section className="px-4 pt-6 pb-4">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-2">DISPATCH 04 · DISCOVER</div>
-        <h1 className="text-hero text-[var(--color-paper)] mb-6">COMMUNITY<br/><span className="text-[var(--color-blaze)]">CRAWLS</span></h1>
+        <h1 className="text-headline text-[var(--color-paper)] mb-6">COMMUNITY<br/><span className="text-[var(--color-blaze)]">CRAWLS</span></h1>
         {!publishedCrawls || publishedCrawls.length === 0 ? (
           <div className="py-16 text-center">
             <MapPin size={28} className="mx-auto mb-4 opacity-20" />

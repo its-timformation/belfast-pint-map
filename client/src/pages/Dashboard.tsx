@@ -99,7 +99,7 @@ export default function Dashboard() {
       {/* Hero */}
       <section className="px-4 pt-6 pb-5">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DISPATCH 01 · {localArea.toUpperCase()}</div>
-        <h1 className="text-hero text-[var(--color-paper)]" style={{ fontSize: 'clamp(2.4rem, 9vw, 4.5rem)' }}>
+        <h1 className="text-headline text-[var(--color-paper)]">
           {stoutsMode
             ? <>THE BEST STOUT<br/>IN BELFAST</>
             : <>THE CHEAPEST<br/><span className="text-[var(--color-blaze)]">PINT</span> IN BELFAST</>
