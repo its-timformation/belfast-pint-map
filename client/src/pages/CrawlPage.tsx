@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { ChevronRight, X, Search, Users, Share2, MapPin, GripVertical, Check } from "lucide-react";
 import { trpc } from "../lib/trpc";
-import { useAppStore, formatPrice, convertPrice } from "../lib/store";
+import { useAppStore, formatPrice, convertPrice, type Currency } from "../lib/store";
 import { LoadingMessage } from "../components/LoadingMessage";
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -380,11 +380,11 @@ export default function CrawlPage() {
 
   /* ── Views ──────────────────────────────────────────────── */
 
-  if (barsLoading && view !== "discover" && view !== "shared") return <LoadingMessage />;
+  if (barsLoading && view !== "discover" && view !== "shared") return <LoadingMessage surface="crawl" />;
 
   /* ── SHARED ─────────────────────────────────────────────── */
   if (view === "shared") {
-    if (sharedLoading) return <LoadingMessage />;
+    if (sharedLoading) return <LoadingMessage surface="crawl" />;
     if (!sharedCrawl) return (
       <div className="max-w-md mx-auto px-4 py-16 text-center">
         <div className="text-eyebrow text-[var(--color-blaze)] mb-3">NOT FOUND</div>
@@ -1221,7 +1221,7 @@ function StopRow({
 }: {
   bar: { id: number; name: string; area?: string | null; drinks?: Array<{ name: string; price: number; currency: string }> };
   idx: number;
-  currency: string;
+  currency: Currency;
   done?: boolean;
 }) {
   const beers = (bar.drinks ?? []).filter(d =>
