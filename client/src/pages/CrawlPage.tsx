@@ -21,8 +21,46 @@ interface CrawlDraft {
   tags: string[];
 }
 
-export const CRAWL_DRAFT_KEY  = "bpm-crawl-draft";
-export const CRAWL_ACTIVE_KEY = "bpm-crawl-active";
+export const CRAWL_DRAFT_KEY   = "bpm-crawl-draft";
+export const CRAWL_ACTIVE_KEY  = "bpm-crawl-active";
+export const CRAWL_SAVED_KEY   = "bpm-saved-crawls";
+
+/* ── Saved crawls (local-only) ──────────────────────────────── */
+interface SavedCrawl {
+  id: string;
+  name: string;
+  description: string;
+  barIds: number[];
+  savedAt: string;   // ISO string
+  shareCode?: string | null;
+}
+
+function loadSavedCrawls(): SavedCrawl[] {
+  try { return JSON.parse(localStorage.getItem(CRAWL_SAVED_KEY) ?? "[]") as SavedCrawl[]; }
+  catch { return []; }
+}
+
+function persistSavedCrawls(crawls: SavedCrawl[]) {
+  try { localStorage.setItem(CRAWL_SAVED_KEY, JSON.stringify(crawls)); } catch {}
+}
+
+function saveCrawlLocally(draft: CrawlDraft): SavedCrawl {
+  const crawl: SavedCrawl = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: draft.name || "Untitled Crawl",
+    description: draft.description,
+    barIds: draft.barIds,
+    savedAt: new Date().toISOString(),
+    shareCode: draft.shareCode,
+  };
+  const existing = loadSavedCrawls().filter(c => c.name !== crawl.name || c.barIds.join() !== crawl.barIds.join());
+  persistSavedCrawls([crawl, ...existing]);
+  return crawl;
+}
+
+function deleteSavedCrawl(id: string) {
+  persistSavedCrawls(loadSavedCrawls().filter(c => c.id !== id));
+}
 
 const EMPTY: CrawlDraft = {
   name: "", description: "", barIds: [], authorName: "",
@@ -117,6 +155,10 @@ export default function CrawlPage() {
   // Builder UI state
   const [showAreaPicker, setShowAreaPicker] = useState(false);
   const [codeCopied, setCodeCopied]         = useState(false);
+  // Saved crawls (local)
+  const [savedCrawls, setSavedCrawls]       = useState<SavedCrawl[]>(() => loadSavedCrawls());
+
+  function refreshSaved() { setSavedCrawls(loadSavedCrawls()); }
 
   useEffect(() => { localStorage.setItem(CRAWL_DRAFT_KEY, JSON.stringify(draft)); }, [draft]);
 
@@ -221,8 +263,18 @@ export default function CrawlPage() {
       barIds: draft.barIds, authorName: draft.authorName || undefined,
       tags: draft.tags, generatedBy: draft.generatedBy,
     });
+    const updatedDraft = { ...draft, shareCode: result.shareCode };
     setDraft(d => ({ ...d, shareCode: result.shareCode }));
+    saveCrawlLocally(updatedDraft);
+    refreshSaved();
     setView("preview");
+  }
+
+  function handleSaveLocally() {
+    if (!draft.barIds.length) return;
+    saveCrawlLocally({ ...draft, name: draft.name || "Untitled Crawl" });
+    refreshSaved();
+    setView("landing");
   }
 
   function saveActive(idx: number, gc: string | null, host: boolean, isGroup: boolean) {
@@ -340,79 +392,147 @@ export default function CrawlPage() {
       <div className="grain-ink max-w-md mx-auto flex flex-col"
         style={{ minHeight: "calc(100dvh - var(--shell-top, 100px) - var(--shell-bottom, 60px))" }}>
 
-        {/* Top content */}
-        <section className="px-4 pt-6 flex-1">
+        {/* Header + stats */}
+        <section className="px-4 pt-6 pb-4 shrink-0">
           <div className="text-eyebrow text-[var(--color-blaze)] mb-3">DISPATCH 04 · PUB CRAWLS</div>
-          <h1 className="text-headline text-[var(--color-paper)] mb-6">
+          <h1 className="text-headline text-[var(--color-paper)] mb-5">
             EXPLORE BELFAST<br/><span className="text-[var(--color-blaze)]">YOUR WAY</span>
           </h1>
 
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2">
             {[
-              {
-                label: "CRAWLS",
-                value: String(publishedCrawls?.length ?? 0).padStart(2, "0"),
-              },
-              {
-                label: "AVG STOPS",
-                value: publishedCrawls?.length
+              { label: "CRAWLS",   value: String(publishedCrawls?.length ?? 0).padStart(2, "0") },
+              { label: "AVG STOPS", value: publishedCrawls?.length
                   ? String(Math.round(publishedCrawls.reduce((s, c) => {
                       try { return s + (JSON.parse(c.barIds) as number[]).length; } catch { return s; }
                     }, 0) / publishedCrawls.length)).padStart(2, "0")
-                  : "—",
-              },
-              {
-                label: "GUINNESS",
-                value: String(allBars.filter(b => b.servesGuinness).length).padStart(2, "0"),
-              },
+                  : "—" },
+              { label: "GUINNESS", value: String(allBars.filter(b => b.servesGuinness).length).padStart(2, "0") },
             ].map(s => (
-              <div key={s.label} className="flex-1 border border-[var(--color-rule)] px-2.5 py-2.5">
+              <div key={s.label} className="flex-1 border border-[var(--color-rule)] px-2.5 py-2">
                 <div className="text-eyebrow opacity-50">{s.label}</div>
-                <div className="font-display text-2xl text-[var(--color-paper)] mt-0.5">{s.value}</div>
+                <div className="font-display text-xl text-[var(--color-paper)] mt-0.5">{s.value}</div>
               </div>
             ))}
           </div>
+        </section>
 
-          {/* JOIN GROUP — prominent at top */}
-          <div className="mb-5">
-            <div className="text-eyebrow opacity-50 mb-2">JOINING A GROUP?</div>
-            <div className="flex gap-2">
-              <input value={joinInput} onChange={e => { setJoinInput(e.target.value.toUpperCase()); setGenError(""); }}
-                placeholder="ENTER CODE" maxLength={6}
-                className="flex-1 bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-mono text-base px-3 py-3 tracking-[0.2em] focus:outline-none focus:border-[var(--color-blaze)]"
-              />
-              <button onClick={() => { if (joinInput.length === 6) handleJoinGroup(); }}
-                disabled={joinInput.length !== 6 || joinGroupMut.isPending}
-                className="bg-[var(--color-blaze)] text-[var(--color-paper)] px-5 font-display text-sm tracking-wider disabled:opacity-40">
-                {joinGroupMut.isPending ? "…" : "JOIN"}
-              </button>
-            </div>
-            {genError && <p className="text-meta text-[var(--color-blaze)] mt-2">{genError}</p>}
+        {/* ── YOUR CRAWLS — fills available space ── */}
+        <section className="px-4 flex-1 min-h-0">
+          <div className="hairline-b pb-1.5 mb-3 flex items-baseline justify-between">
+            <div className="font-display text-base uppercase text-[var(--color-paper)]">YOUR CRAWLS</div>
+            {savedCrawls.length > 0 && (
+              <span className="text-eyebrow opacity-40">{savedCrawls.length}</span>
+            )}
           </div>
 
-          {/* Draft resume — shown inline if there's a draft */}
+          {savedCrawls.length === 0 ? (
+            /* ── Blank state ── */
+            <div className="py-10 flex flex-col items-center gap-4 text-center">
+              <svg width="48" height="56" viewBox="0 0 48 56" fill="none" className="opacity-20"
+                   stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 6h28L34 50H14L10 6z"/>
+                <path d="M10 6h28"/>
+                <path d="M11 16h26"/>
+                <circle cx="24" cy="34" r="7"/>
+                <path d="M24 30v4l3 2"/>
+              </svg>
+              <div>
+                <div className="font-display text-lg uppercase text-[var(--color-paper)] opacity-50">
+                  NO SAVED CRAWLS
+                </div>
+                <div className="text-meta opacity-40 mt-1">
+                  Build a route and save it to see it here
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ── Saved crawl list ── */
+            <ul className="space-y-0">
+              {savedCrawls.map(crawl => (
+                <li key={crawl.id} className="hairline-b-soft last:border-b-0 flex items-center gap-3 py-3">
+                  <button
+                    className="flex-1 min-w-0 text-left"
+                    onClick={() => {
+                      setDraft({
+                        ...EMPTY,
+                        name: crawl.name,
+                        description: crawl.description,
+                        barIds: crawl.barIds,
+                        shareCode: crawl.shareCode ?? null,
+                      });
+                      setView("preview");
+                    }}
+                  >
+                    <div className="font-display text-base uppercase text-[var(--color-paper)] truncate leading-tight">
+                      {crawl.name}
+                    </div>
+                    <div className="text-meta opacity-50 mt-0.5">
+                      {crawl.barIds.length} STOPS · {new Date(crawl.savedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }).toUpperCase()}
+                    </div>
+                  </button>
+                  <ChevronRight size={13} strokeWidth={1.4} className="opacity-30 shrink-0" />
+                  <button
+                    onClick={() => { deleteSavedCrawl(crawl.id); refreshSaved(); }}
+                    className="!min-h-0 p-1.5 opacity-30 hover:opacity-70 shrink-0"
+                    aria-label="Delete crawl"
+                  >
+                    <X size={14} strokeWidth={1.6} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Draft resume — if a draft is in progress */}
           {hasDraft && (
-            <div className="border border-[var(--color-rule)] p-3 mb-2">
+            <div className="border border-[var(--color-rule)] p-3 mt-4">
               <div className="text-eyebrow opacity-50 mb-1">DRAFT IN PROGRESS</div>
               <div className="font-display text-base uppercase text-[var(--color-paper)] mb-2">
                 {draft.name || "UNNAMED CRAWL"} · {draft.barIds.length} STOPS
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setView("building")} className="flex-1 bg-[var(--color-blaze)] text-[var(--color-paper)] text-eyebrow py-2.5">RESUME</button>
-                <button onClick={() => setDraft(EMPTY)} className="border border-[var(--color-rule)] text-[var(--color-paper)] text-eyebrow px-4 py-2.5 opacity-60 hover:border-[var(--color-blaze)]">CLEAR</button>
+                <button onClick={() => setDraft(EMPTY)} className="border border-[var(--color-rule)] text-[var(--color-paper)] text-eyebrow px-4 py-2.5 opacity-60">CLEAR</button>
               </div>
             </div>
           )}
         </section>
 
-        {/* Build + Discover — pinned at bottom */}
-        <div className="px-4 pb-6 pt-4 flex flex-col gap-3">
-          <button onClick={() => setView("building")}
-            className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider">
+        {/* JOIN + Build/Discover — pinned at bottom */}
+        <div className="px-4 pb-6 pt-4 shrink-0 flex flex-col gap-3">
+          {/* Join group row */}
+          <div>
+            <div className="text-eyebrow opacity-45 mb-1.5">JOIN A GROUP CRAWL</div>
+            <div className="flex gap-2">
+              <input
+                value={joinInput}
+                onChange={e => { setJoinInput(e.target.value.toUpperCase()); setGenError(""); }}
+                placeholder="GROUP CODE"
+                maxLength={6}
+                className="flex-1 bg-transparent border border-[var(--color-rule)] text-[var(--color-paper)] font-mono text-sm px-3 py-2.5 tracking-[0.2em] focus:outline-none focus:border-[var(--color-blaze)]"
+              />
+              <button
+                onClick={() => { if (joinInput.length === 6) handleJoinGroup(); }}
+                disabled={joinInput.length !== 6 || joinGroupMut.isPending}
+                className="bg-[var(--color-blaze)] text-[var(--color-paper)] px-4 font-display text-sm tracking-wider disabled:opacity-40"
+              >
+                {joinGroupMut.isPending ? "…" : "JOIN"}
+              </button>
+            </div>
+            {genError && <p className="text-meta text-[var(--color-blaze)] mt-1.5">{genError}</p>}
+          </div>
+
+          <button
+            onClick={() => setView("building")}
+            className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider"
+          >
             BUILD A CRAWL →
           </button>
-          <button onClick={() => setView("discover")}
-            className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider hover:border-[var(--color-blaze)]">
+          <button
+            onClick={() => setView("discover")}
+            className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider hover:border-[var(--color-blaze)]"
+          >
             DISCOVER CRAWLS
           </button>
         </div>
@@ -540,6 +660,13 @@ export default function CrawlPage() {
           <button onClick={handleSave} disabled={draft.barIds.length < 2 || !draft.name.trim() || createMut.isPending}
             className="w-full bg-[var(--color-blaze)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider disabled:opacity-40 mb-2">
             {createMut.isPending ? "SAVING..." : "SAVE & SHARE →"}
+          </button>
+          <button
+            onClick={handleSaveLocally}
+            disabled={draft.barIds.length < 2}
+            className="w-full border border-[var(--color-rule)] text-[var(--color-paper)] font-display text-base py-3 tracking-wider disabled:opacity-40 mb-2 hover:border-[var(--color-blaze)]"
+          >
+            SAVE TO MY CRAWLS
           </button>
           <button onClick={() => setView("landing")} className="w-full text-meta opacity-50 py-2 text-center">← BACK</button>
         </div>
