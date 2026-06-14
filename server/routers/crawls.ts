@@ -12,6 +12,20 @@ function generateCode(length: number): string {
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
+function geoDistKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 const BEER_RE = /pint|beer|lager|guinness|harp|tennent|smithwick|stella|heineken|carlsberg|ipa|pale ale|stout|porter|sour|amber|red ale|craft/i;
 const CRAFT_RE = /\bipa\b|\bdipa\b|\bneipa\b|pale ale|\bsour\b|\bporter\b|milk stout|oatmeal stout|imperial stout|wheat beer|saison|cream ale|whitewater|boundary|hilden|bullhouse|farmageddon|lacada|craft lager|craft beer/i;
 
@@ -67,11 +81,18 @@ export const crawlsRouter = router({
       return crawl;
     }),
 
-  /** Submit a crawl for community review */
+  /** Submit a crawl for community review, optionally attaching an author name */
   submit: publicProcedure
-    .input(z.object({ shareCode: z.string() }))
+    .input(z.object({
+      shareCode: z.string(),
+      authorName: z.string().max(40).optional(),
+    }))
     .mutation(async ({ input }) => {
-      await db.update(pubCrawls).set({ status: "submitted" })
+      await db.update(pubCrawls)
+        .set({
+          status: "submitted",
+          ...(input.authorName ? { authorName: input.authorName } : {}),
+        })
         .where(eq(pubCrawls.shareCode, input.shareCode));
       return { ok: true };
     }),
@@ -86,8 +107,10 @@ export const crawlsRouter = router({
   /** Auto-generate a crawl from a preset */
   generate: publicProcedure
     .input(z.object({
-      preset: z.enum(["cheapest", "guinness", "craft", "trad", "area", "brewery", "epic"]),
-      area: z.string().optional(),
+      preset: z.enum(["cheapest", "guinness", "craft", "trad", "area", "brewery", "epic", "nearby"]),
+      area: z.string().optional(),   // optional area filter for any preset
+      lat: z.number().optional(),    // for "nearby" preset
+      lng: z.number().optional(),    // for "nearby" preset
       maxStops: z.number().min(3).max(10).default(5),
     }))
     .mutation(async ({ input }) => {
@@ -177,6 +200,33 @@ export const crawlsRouter = router({
           name = "Epic Belfast Crawl";
           tags = ["epic", "multi-area", "city-wide"];
           break;
+        }
+
+        case "nearby": {
+          if (input.lat != null && input.lng != null) {
+            const origin = { lat: input.lat, lng: input.lng };
+            candidates = candidates
+              .filter(b => b.lat && b.lng)
+              .sort((a, b) => geoDistKm(origin, a) - geoDistKm(origin, b));
+            name = "Near Me Crawl";
+            tags = ["nearby", "walking", "local"];
+          } else {
+            // No coords: fall back to highest-rated
+            candidates = candidates.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+            name = "Belfast Crawl";
+            tags = ["local"];
+          }
+          break;
+        }
+      }
+
+      // Optional area filter applied on top of any preset (except "area" which handles it inline)
+      if (input.area && input.preset !== "area") {
+        const areaFiltered = candidates.filter(b => b.area === input.area);
+        // Only apply if the filter still leaves enough bars
+        if (areaFiltered.length >= 2) {
+          candidates = areaFiltered;
+          name = `${name} · ${input.area}`;
         }
       }
 

@@ -7,6 +7,38 @@ import { useAppStore, convertPrice, formatPrice, isOpenNow } from "../lib/store"
 import { LoadingMessage } from "../components/LoadingMessage";
 import "leaflet/dist/leaflet.css";
 
+/* ── Time-aware deal check ─────────────────────────────────── */
+type DealRow = {
+  id: number;
+  barId: number;
+  isActive: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  daysOfWeek: string | null;
+};
+
+function isDealCurrentlyActive(deal: DealRow): boolean {
+  if (!deal.isActive) return false;
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sun
+
+  if (deal.daysOfWeek) {
+    try {
+      const days = JSON.parse(deal.daysOfWeek) as number[];
+      if (days.length > 0 && !days.includes(day)) return false;
+    } catch {}
+  }
+
+  if (deal.startTime && deal.endTime) {
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = deal.startTime.split(":").map(Number);
+    const [eh, em] = deal.endTime.split(":").map(Number);
+    if (cur < sh * 60 + sm || cur > eh * 60 + em) return false;
+  }
+
+  return true;
+}
+
 /* ── Pins ──────────────────────────────────────────────────── */
 function makePin(fill: string, hasDeal = false, size = 24) {
   const half = size / 2;
@@ -72,7 +104,6 @@ function AreaLabels() {
   );
 }
 
-/* ── Focus controller ──────────────────────────────────────── */
 function FocusController({ focusId, bars }: { focusId?: number; bars: any[] }) {
   const map = useMap();
   useEffect(() => {
@@ -83,7 +114,6 @@ function FocusController({ focusId, bars }: { focusId?: number; bars: any[] }) {
   return null;
 }
 
-/* ── Exposes map instance to parent via ref ────────────────── */
 function MapReady({ onReady }: { onReady: (m: L.Map) => void }) {
   const map = useMap();
   useEffect(() => { onReady(map); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -94,7 +124,7 @@ function MapReady({ onReady }: { onReady: (m: L.Map) => void }) {
 export default function MapPage() {
   const { currency } = useAppStore();
   const { data: barsWithDetails, isLoading } = trpc.bars.getAllWithDetails.useQuery();
-  const { data: deals } = trpc.bars.getDeals.useQuery();
+  const { data: dealsData } = trpc.bars.getDeals.useQuery();
   const [params] = useSearchParams();
   const focusId = params.get("focus") ? Number(params.get("focus")) : undefined;
   const mapRef = useRef<L.Map | null>(null);
@@ -116,13 +146,17 @@ export default function MapPage() {
     return [avgLat, avgLng];
   }, [barsWithDetails]);
 
-  if (isLoading) return <LoadingMessage surface="map" />;
+  // Bars with an ACTIVE deal right now (time + day aware)
+  const activeDealBarIds = useMemo(
+    () => new Set((dealsData ?? []).filter(isDealCurrentlyActive).map(d => d.barId)),
+    [dealsData],
+  );
 
-  const barsWithDealsSet = new Set((deals ?? []).filter(d => d.isActive).map(d => d.barId));
+  if (isLoading) return <LoadingMessage surface="map" />;
 
   return (
     <div className="flex flex-col h-full">
-      {/* Page header */}
+      {/* Header */}
       <div className="px-4 py-3 hairline-b flex items-center justify-between shrink-0">
         <div>
           <div className="text-eyebrow text-[var(--color-blaze)]">DISPATCH 02 · ATLAS</div>
@@ -131,7 +165,6 @@ export default function MapPage() {
         <div className="text-meta opacity-55">{(barsWithDetails?.length ?? 0).toString().padStart(2, "0")} BARS</div>
       </div>
 
-      {/* Map */}
       <div className="flex-1 min-h-0 relative overflow-hidden" style={{ minHeight: 0 }}>
         <MapContainer
           center={center}
@@ -148,12 +181,11 @@ export default function MapPage() {
           <FocusController focusId={focusId} bars={barsWithDetails ?? []} />
           <AreaLabels />
 
-          {/* User location pin */}
+          {/* User location */}
           {userLocation && (
             <Marker position={userLocation} icon={PIN_USER} zIndexOffset={1000}>
               <Popup className="custom-popup" closeButton={false}>
-                <div className="p-3">
-                  <div className="text-eyebrow text-[var(--color-frost)] opacity-80 mb-1">YOUR LOCATION</div>
+                <div className="px-3 py-2.5">
                   <div className="font-display text-sm uppercase text-[var(--color-paper)]">YOU ARE HERE</div>
                 </div>
               </Popup>
@@ -161,52 +193,66 @@ export default function MapPage() {
           )}
 
           {(barsWithDetails ?? []).map(bar => {
-            const isFocus = bar.id === focusId;
-            const hasDeal = barsWithDealsSet.has(bar.id);
+            const isFocus    = bar.id === focusId;
+            const hasActiveDeal = activeDealBarIds.has(bar.id);
             const icon = isFocus
-              ? (hasDeal ? PIN_FOCUS_DEAL : PIN_FOCUS)
-              : (hasDeal ? PIN_DEAL : PIN_BAR);
+              ? (hasActiveDeal ? PIN_FOCUS_DEAL : PIN_FOCUS)
+              : (hasActiveDeal ? PIN_DEAL : PIN_BAR);
 
+            // Cheapest pint in user's currency
             const beerDrinks = (bar.drinks ?? []).filter(d =>
-              /lager|beer|pint|kronen|stella|heineken|guinness|ipa|1664/i.test(d.name)
+              /lager|beer|pint|stella|heineken|guinness|harp|ipa/i.test(d.name)
             );
-            const cheapest = beerDrinks.length
+            const cheapestPrice = beerDrinks.length
               ? beerDrinks.reduce((min, d) => {
                   const p = convertPrice(d.price, d.currency as any, currency);
-                  return p < min.price ? { price: p } : min;
-                }, { price: Infinity })
+                  return p < min ? p : min;
+                }, Infinity)
               : null;
+
             const open = isOpenNow(bar.openingHours);
+
+            // Active deals for this bar
+            const barActiveDeals = (bar.deals ?? []).filter(isDealCurrentlyActive);
 
             return (
               <Marker key={bar.id} position={[bar.lat, bar.lng]} icon={icon}>
-                <Popup className="custom-popup" closeButton={false}>
-                  <Link to={`/bar/${bar.id}`} className="block p-3">
-                    {bar.area && (
-                      <div className="text-eyebrow text-[var(--color-blaze)] opacity-80 mb-1">
-                        {bar.area.toUpperCase()}
-                      </div>
-                    )}
-                    <div className="font-display text-base uppercase text-[var(--color-paper)]">
+                <Popup className="custom-popup" closeButton={false} minWidth={160} maxWidth={220}>
+                  <Link to={`/bar/${bar.id}`} className="block px-3 py-2.5 no-underline">
+
+                    {/* Name — one line */}
+                    <div className="font-display text-sm uppercase text-[var(--color-paper)] leading-tight mb-1.5">
                       {bar.name}
                     </div>
-                    <div className="text-meta opacity-60 mt-1.5 flex items-center gap-1.5">
-                      <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${open.open ? "bg-[var(--color-verified)]" : "bg-[var(--color-paper)] opacity-35"}`} />
-                      {open.open ? `OPEN UNTIL ${open.closesAt}` : `OPENS ${open.opensAt ?? "—"}`}
+
+                    {/* Open + price on one line */}
+                    <div className="flex items-center gap-2 text-eyebrow opacity-60">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${open.open ? "bg-[var(--color-verified)]" : "bg-current opacity-30"}`} />
+                      <span>{open.open ? "OPEN" : "CLOSED"}</span>
+                      {cheapestPrice && cheapestPrice < Infinity && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span className="text-[var(--color-sun)] opacity-100">
+                            {formatPrice(cheapestPrice, currency)}
+                          </span>
+                        </>
+                      )}
                     </div>
-                    {cheapest && cheapest.price < Infinity && (
-                      <div className="font-display text-lg text-[var(--color-sun)] mt-2">
-                        {formatPrice(cheapest.price, currency)}
+
+                    {/* Active deal tags */}
+                    {(barActiveDeals.length > 0 || bar.servesGuinness) && (
+                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                        {barActiveDeals.slice(0, 2).map(d => (
+                          <span key={d.id} className="text-eyebrow text-[var(--color-sun)] opacity-90">
+                            {(d as any).title?.toUpperCase().slice(0, 18) ?? "DEAL ON"}
+                          </span>
+                        ))}
+                        {bar.servesGuinness && barActiveDeals.length === 0 && (
+                          <span className="text-eyebrow opacity-40">GUINNESS</span>
+                        )}
                       </div>
                     )}
-                    {bar.servesGuinness && (
-                      <div className="mt-2">
-                        <span className="text-meta text-[10px] tracking-wide text-[var(--color-sun)] border border-[var(--color-sun)] border-opacity-40 px-1.5 py-0.5">
-                          POURS GUINNESS
-                        </span>
-                      </div>
-                    )}
-                    <div className="text-meta opacity-45 mt-2.5">VIEW BAR →</div>
+
                   </Link>
                 </Popup>
               </Marker>
@@ -214,7 +260,7 @@ export default function MapPage() {
           })}
         </MapContainer>
 
-        {/* Custom zoom + locate controls — top right */}
+        {/* Zoom + locate */}
         <div className="absolute top-3 right-3 z-[400] flex flex-col border border-[var(--color-rule)]">
           <button
             onClick={() => mapRef.current?.zoomIn()}
@@ -232,8 +278,12 @@ export default function MapPage() {
                 mapRef.current?.setView(userLocation, 15, { animate: true });
               } else {
                 navigator.geolocation?.getCurrentPosition(
-                  p => { const ll: [number,number] = [p.coords.latitude, p.coords.longitude]; setUserLocation(ll); mapRef.current?.setView(ll, 15, { animate: true }); },
-                  () => {}
+                  p => {
+                    const ll: [number, number] = [p.coords.latitude, p.coords.longitude];
+                    setUserLocation(ll);
+                    mapRef.current?.setView(ll, 15, { animate: true });
+                  },
+                  () => {},
                 );
               }
             }}
@@ -247,34 +297,28 @@ export default function MapPage() {
           </button>
         </div>
 
-        {/* Legend — bottom left */}
+        {/* Legend */}
         <div className="absolute bottom-3 left-3 bg-[var(--color-ink)] bg-opacity-90 border border-[var(--color-rule)] p-2 text-meta z-[400] space-y-1.5">
           <div className="flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24">
               <rect x="5" y="5" width="14" height="14" transform="rotate(45 12 12)" fill="#E63E0B" stroke="#0A0908" strokeWidth="1.2"/>
             </svg>
-            <span>BAR</span>
+            <span className="opacity-60">BAR</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24">
               <rect x="2" y="2" width="20" height="20" transform="rotate(45 12 12)" fill="none" stroke="#F2C12E" strokeWidth="1.5"/>
               <rect x="5" y="5" width="14" height="14" transform="rotate(45 12 12)" fill="#E63E0B" stroke="#0A0908" strokeWidth="1.2"/>
             </svg>
-            <span>HAS DEAL</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }}>
-              <rect x="5" y="5" width="14" height="14" transform="rotate(45 12 12)" fill="#F2C12E" stroke="#0A0908" strokeWidth="1.2"/>
-            </svg>
-            <span>FOCUSED</span>
+            <span className="text-[var(--color-sun)]">DEAL NOW</span>
           </div>
           {userLocation && (
             <div className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 14 14" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }}>
+              <svg width="12" height="12" viewBox="0 0 14 14">
                 <circle cx="7" cy="7" r="6" fill="#87B0D9" stroke="#FBF5E0" strokeWidth="1"/>
                 <circle cx="7" cy="7" r="2.5" fill="#FBF5E0"/>
               </svg>
-              <span>YOU</span>
+              <span className="text-[var(--color-frost)] opacity-80">YOU</span>
             </div>
           )}
         </div>
