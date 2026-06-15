@@ -217,38 +217,36 @@ export default function MapPage() {
 
             return (
               <Marker key={bar.id} position={[bar.lat, bar.lng]} icon={icon}>
-                <Popup className="custom-popup" closeButton={false} minWidth={160} maxWidth={220}>
+                <Popup className="bpm-popup" closeButton={false} minWidth={160} maxWidth={220}>
                   <Link to={`/bar/${bar.id}`} className="block px-3 py-2.5 no-underline">
 
-                    {/* Name — one line */}
-                    <div className="font-display text-sm uppercase text-[var(--color-paper)] leading-tight mb-1.5">
+                    {/* Name */}
+                    <div style={{ fontFamily: "Anton, Impact, sans-serif", fontSize: "0.85rem", letterSpacing: "0.05em", textTransform: "uppercase", color: "#0A0908", lineHeight: 1.2, marginBottom: "0.35rem" }}>
                       {bar.name}
                     </div>
 
-                    {/* Open + price on one line */}
-                    <div className="flex items-center gap-2 text-eyebrow opacity-60">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${open.open ? "bg-[var(--color-verified)]" : "bg-current opacity-30"}`} />
+                    {/* Open + price */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.08em", color: "#0A0908", opacity: 0.65 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: open.open ? "#4ADE80" : "#0A090840", flexShrink: 0 }} />
                       <span>{open.open ? "OPEN" : "CLOSED"}</span>
                       {cheapestPrice && cheapestPrice < Infinity && (
                         <>
-                          <span className="opacity-40">·</span>
-                          <span className="text-[var(--color-sun)] opacity-100">
-                            {formatPrice(cheapestPrice, currency)}
-                          </span>
+                          <span style={{ opacity: 0.4 }}>·</span>
+                          <span style={{ color: "#C4732A", opacity: 1 }}>{formatPrice(cheapestPrice, currency)}</span>
                         </>
                       )}
                     </div>
 
-                    {/* Active deal tags */}
+                    {/* Active deals */}
                     {(barActiveDeals.length > 0 || bar.servesGuinness) && (
-                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
                         {barActiveDeals.slice(0, 2).map(d => (
-                          <span key={d.id} className="text-eyebrow text-[var(--color-sun)] opacity-90">
+                          <span key={d.id} style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.08em", color: "#C4732A" }}>
                             {(d as any).title?.toUpperCase().slice(0, 18) ?? "DEAL ON"}
                           </span>
                         ))}
                         {bar.servesGuinness && barActiveDeals.length === 0 && (
-                          <span className="text-eyebrow opacity-40">GUINNESS</span>
+                          <span style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.08em", color: "#0A0908", opacity: 0.4 }}>GUINNESS</span>
                         )}
                       </div>
                     )}

@@ -41,6 +41,13 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  });
+}
+
 requestAnimationFrame(() => {
   const loader = document.getElementById('app-loader');
   if (loader) {

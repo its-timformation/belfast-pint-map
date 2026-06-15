@@ -1,6 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
-  <rect width="120" height="120" rx="24" fill="#E63E0B"/>
-  <path d="M28,21 L92,21 L84,99 Q84,105 78,105 L42,105 Q36,105 36,99 Z" fill="#0A0908"/>
-  <ellipse cx="60" cy="21" rx="32" ry="10" fill="#FBF5E0"/>
-  <text x="60" y="79" font-family="Anton, Impact, Arial Narrow, sans-serif" font-size="38" font-weight="400" fill="#FBF5E0" text-anchor="middle">P</text>
+  <!-- Blaze red rounded square -->
+  <rect width="120" height="120" rx="22" fill="#E63E0B"/>
+  <!-- Pint glass body (ink/dark) -->
+  <path d="M34,26 L86,26 L79,94 Q79,100 73,100 L47,100 Q41,100 41,94 Z" fill="#0A0908"/>
+  <!-- Foam head — cream -->
+  <ellipse cx="60" cy="26" rx="26" ry="9" fill="#FBF5E0"/>
+  <!-- Foam bumps on top -->
+  <circle cx="50" cy="23" r="5.5" fill="#FBF5E0"/>
+  <circle cx="62" cy="20" r="7" fill="#FBF5E0"/>
+  <circle cx="73" cy="23" r="5" fill="#FBF5E0"/>
+  <!-- Liquid colour band inside glass -->
+  <path d="M37,44 L83,44 L79,94 Q79,100 73,100 L47,100 Q41,100 41,94 Z" fill="#C4732A" opacity="0.3"/>
+  <!-- Glass highlight -->
+  <line x1="45" y1="34" x2="43" y2="88" stroke="#FBF5E0" stroke-width="2.5" opacity="0.15" stroke-linecap="round"/>
 </svg>

@@ -4,6 +4,7 @@ import { useAppStore } from "./lib/store";
 import { APP_VERSION } from './lib/version';
 import { PinSentry } from "./components/PinSentry";
 import { BuildNotification } from "./components/BuildNotification";
+import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { CRAWL_ACTIVE_KEY } from "./pages/CrawlPage";
 
 import Dashboard from "./pages/Dashboard";
@@ -340,6 +341,7 @@ function Shell() {
       <StoutsBubbles active={stoutsMode} />
       {showSentry && <PinSentry onUnlock={onUnlock} onCancel={() => setShowSentry(false)} />}
       <BuildNotification isAdmin={adminActive} />
+      <PWAInstallBanner />
     </>
   );
 }
