@@ -4,8 +4,12 @@ import { useAppStore } from "./lib/store";
 import { APP_VERSION } from './lib/version';
 import { PinSentry } from "./components/PinSentry";
 import { BuildNotification } from "./components/BuildNotification";
-import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { CRAWL_ACTIVE_KEY } from "./pages/CrawlPage";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
 
 import Dashboard from "./pages/Dashboard";
 import MapPage from "./pages/MapPage";
@@ -189,31 +193,35 @@ function Header({ onWordmarkTap }: { onWordmarkTap: () => void }) {
 }
 
 /* ── Bottom Nav — icons only, no labels ─────────────────────── */
-function BottomNav() {
+interface BottomNavProps {
+  installable: boolean;
+  isIOS: boolean;
+  onInstall: () => void;
+}
+
+function BottomNav({ installable, isIOS, onInstall }: BottomNavProps) {
   const location = useLocation();
+  const [iosTooltip, setIosTooltip] = useState(false);
+
   const items = [
     { to: "/", label: "Dashboard", icon: (
-      // Home
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M3 12L12 4l9 8M5 10v10h5v-6h4v6h5V10"/>
       </svg>
     )},
     { to: "/map", label: "Map", icon: (
-      // Map pin
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M12 22S4 14 4 9a8 8 0 0116 0c0 5-8 13-8 13z"/>
         <circle cx="12" cy="9" r="2.5"/>
       </svg>
     )},
     { to: "/list", label: "Bars", icon: (
-      // Pint glass — clean trapezoid, wider at top
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M5 3h14L17 22H7L5 3z"/>
         <path d="M5.5 9h13"/>
       </svg>
     )},
     { to: "/crawl", label: "Crawl", icon: (
-      // Route between two points
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <circle cx="5" cy="19" r="2"/>
         <circle cx="19" cy="5" r="2"/>
@@ -222,9 +230,12 @@ function BottomNav() {
     )},
   ];
 
+  const showInstall = installable || isIOS;
+  const cols = showInstall ? "grid-cols-5" : "grid-cols-4";
+
   return (
     <nav data-shell="nav" className="bg-[var(--color-ink)] hairline-t pb-safe">
-      <div className="max-w-md mx-auto grid grid-cols-4">
+      <div className={`max-w-md mx-auto grid ${cols}`}>
         {items.map(item => {
           const active = item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
           return (
@@ -238,6 +249,43 @@ function BottomNav() {
             </Link>
           );
         })}
+
+        {/* Install button — only when installable */}
+        {showInstall && (
+          <div className="relative">
+            <button
+              onClick={() => { if (isIOS) setIosTooltip(t => !t); else onInstall(); }}
+              className="flex flex-col items-center justify-center py-4 min-h-[56px] w-full text-[var(--color-paper)] opacity-35 hover:opacity-70 transition-opacity"
+              aria-label="Install app"
+            >
+              {/* Download-to-device icon */}
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3v11M8 10l4 4 4-4"/>
+                <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"/>
+              </svg>
+            </button>
+
+            {/* iOS tooltip — appears above the button */}
+            {iosTooltip && (
+              <div
+                className="absolute bottom-full right-0 mb-2 w-52 bg-[var(--color-ink-card)] border border-[var(--color-rule)] p-3 z-[9999]"
+                style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.6)" }}
+              >
+                <button
+                  onClick={() => setIosTooltip(false)}
+                  className="absolute top-1 right-1 !min-h-0 p-1 opacity-40 hover:opacity-80"
+                  aria-label="Close"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+                <div className="text-eyebrow text-[var(--color-paper)] mb-1.5">ADD TO HOME SCREEN</div>
+                <div className="text-meta opacity-50 leading-relaxed">
+                  Tap <span className="opacity-90">⎙ Share</span> then <span className="opacity-90">Add to Home Screen</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </nav>
   );
@@ -253,6 +301,30 @@ function Shell() {
   const [adminActive, setAdminActive] = useState(() => hasAdminSession());
   const [tapCount,    setTapCount]    = useState(0);
   const [tapStart,    setTapStart]    = useState(0);
+
+  // PWA install state
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstallableAndroid, setIsInstallableAndroid] = useState(false);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true;
+
+  useEffect(() => {
+    if (isStandalone) return; // already installed
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setIsInstallableAndroid(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, [isStandalone]);
+
+  async function handleInstall() {
+    if (!deferredPrompt) return;
+    await deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") { setDeferredPrompt(null); setIsInstallableAndroid(false); }
+  }
 
   const onWordmarkTap = () => {
     const now = Date.now();
@@ -335,13 +407,18 @@ function Shell() {
       </main>
 
       {!isFullScreen && (
-        <div className="fixed bottom-0 left-0 right-0 z-50"><BottomNav /></div>
+        <div className="fixed bottom-0 left-0 right-0 z-50">
+          <BottomNav
+            installable={isInstallableAndroid}
+            isIOS={isIOS && !isStandalone}
+            onInstall={handleInstall}
+          />
+        </div>
       )}
 
       <StoutsBubbles active={stoutsMode} />
       {showSentry && <PinSentry onUnlock={onUnlock} onCancel={() => setShowSentry(false)} />}
       <BuildNotification isAdmin={adminActive} />
-      <PWAInstallBanner />
     </>
   );
 }
