@@ -4,6 +4,7 @@ import { useAppStore } from "./lib/store";
 import { APP_VERSION } from './lib/version';
 import { PinSentry } from "./components/PinSentry";
 import { BuildNotification } from "./components/BuildNotification";
+import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { CRAWL_ACTIVE_KEY } from "./pages/CrawlPage";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -138,29 +139,71 @@ function StoutsBubbles({ active }: { active: boolean }) {
 }
 
 /* ── Ticker ────────────────────────────────────────────────── */
-function TickerBand({ adminActive, onAdminTap }: { adminActive: boolean; onAdminTap: () => void }) {
+interface TickerBandProps {
+  adminActive: boolean;
+  onAdminTap: () => void;
+  installable: boolean;
+  isIOS: boolean;
+  onInstall: () => void;
+}
+
+function TickerBand({ adminActive, onAdminTap, installable, isIOS, onInstall }: TickerBandProps) {
   const location = useLocation();
-  const today    = new Date();
-  const dateStr  = `${today.getDate().toString().padStart(2,'0')}.${(today.getMonth()+1).toString().padStart(2,'0')}.${today.getFullYear().toString().slice(-2)}`;
+  const [iosTooltip, setIosTooltip] = useState(false);
+  const today   = new Date();
+  const dateStr = `${today.getDate().toString().padStart(2,'0')}.${(today.getMonth()+1).toString().padStart(2,'0')}.${today.getFullYear().toString().slice(-2)}`;
   const pageMap: Record<string, string> = { '/': 'DISPATCH 01', '/map': 'DISPATCH 02', '/list': 'DISPATCH 03', '/crawl': 'DISPATCH 04' };
   let pageLabel = pageMap[location.pathname] || '';
   if (!pageLabel) {
-    if (location.pathname.startsWith('/bar/'))    pageLabel = 'DISPATCH 04';
+    if (location.pathname.startsWith('/bar/'))        pageLabel = 'DISPATCH 04';
     else if (location.pathname.startsWith('/submit/')) pageLabel = 'DISPATCH 05';
     else if (location.pathname.startsWith('/crawl'))   pageLabel = 'DISPATCH 04';
     else if (location.pathname.startsWith('/admin'))   pageLabel = 'ADMIN';
   }
+
+  const showInstall = (installable || isIOS) && !window.matchMedia("(display-mode: standalone)").matches;
+
   return (
-    <div data-shell="ticker" className="bg-[var(--color-ink)] text-[var(--color-paper)] hairline-b">
+    <div data-shell="ticker" className="bg-[var(--color-ink)] text-[var(--color-paper)] hairline-b relative">
       <div className="max-w-md mx-auto px-4 py-2 flex items-center justify-between text-eyebrow opacity-70">
         <span>BELFAST</span>
         <span>{dateStr}</span>
-        <button onClick={onAdminTap} className="!min-h-0 px-1 -mx-1 hover:opacity-100 transition-opacity" aria-label="Version / admin">
-          <span className={adminActive ? "text-[var(--color-blaze)] opacity-100" : ""}>
-            v{APP_VERSION}
-          </span>
-        </button>
+        <div className="flex items-center gap-3">
+          {showInstall && (
+            <button
+              onClick={() => isIOS ? setIosTooltip(t => !t) : onInstall()}
+              className="!min-h-0 flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity"
+              aria-label="Install app"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3v11M8 10l4 4 4-4"/>
+                <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"/>
+              </svg>
+              <span>INSTALL</span>
+            </button>
+          )}
+          <button onClick={onAdminTap} className="!min-h-0 px-1 -mx-1 hover:opacity-100 transition-opacity" aria-label="Version / admin">
+            <span className={adminActive ? "text-[var(--color-blaze)] opacity-100" : ""}>
+              v{APP_VERSION}
+            </span>
+          </button>
+        </div>
       </div>
+
+      {/* iOS tooltip */}
+      {iosTooltip && (
+        <div className="absolute top-full right-4 mt-1 w-52 bg-[var(--color-ink-card)] border border-[var(--color-rule)] p-3 z-[9999]"
+          style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.6)" }}>
+          <button onClick={() => setIosTooltip(false)}
+            className="absolute top-1 right-1 !min-h-0 p-1 opacity-40 hover:opacity-80" aria-label="Close">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+          <div className="text-eyebrow text-[var(--color-paper)] mb-1.5">ADD TO HOME SCREEN</div>
+          <div className="text-meta opacity-50 leading-relaxed">
+            Tap <span className="opacity-90">⎙ Share</span> then <span className="opacity-90">Add to Home Screen</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -193,15 +236,8 @@ function Header({ onWordmarkTap }: { onWordmarkTap: () => void }) {
 }
 
 /* ── Bottom Nav — icons only, no labels ─────────────────────── */
-interface BottomNavProps {
-  installable: boolean;
-  isIOS: boolean;
-  onInstall: () => void;
-}
-
-function BottomNav({ installable, isIOS, onInstall }: BottomNavProps) {
+function BottomNav() {
   const location = useLocation();
-  const [iosTooltip, setIosTooltip] = useState(false);
 
   const items = [
     { to: "/", label: "Dashboard", icon: (
@@ -230,12 +266,9 @@ function BottomNav({ installable, isIOS, onInstall }: BottomNavProps) {
     )},
   ];
 
-  const showInstall = installable || isIOS;
-  const cols = showInstall ? "grid-cols-5" : "grid-cols-4";
-
   return (
     <nav data-shell="nav" className="bg-[var(--color-ink)] hairline-t pb-safe">
-      <div className={`max-w-md mx-auto grid ${cols}`}>
+      <div className="max-w-md mx-auto grid grid-cols-4">
         {items.map(item => {
           const active = item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
           return (
@@ -249,43 +282,6 @@ function BottomNav({ installable, isIOS, onInstall }: BottomNavProps) {
             </Link>
           );
         })}
-
-        {/* Install button — only when installable */}
-        {showInstall && (
-          <div className="relative">
-            <button
-              onClick={() => { if (isIOS) setIosTooltip(t => !t); else onInstall(); }}
-              className="flex flex-col items-center justify-center py-4 min-h-[56px] w-full text-[var(--color-paper)] opacity-35 hover:opacity-70 transition-opacity"
-              aria-label="Install app"
-            >
-              {/* Download-to-device icon */}
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M12 3v11M8 10l4 4 4-4"/>
-                <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"/>
-              </svg>
-            </button>
-
-            {/* iOS tooltip — appears above the button */}
-            {iosTooltip && (
-              <div
-                className="absolute bottom-full right-0 mb-2 w-52 bg-[var(--color-ink-card)] border border-[var(--color-rule)] p-3 z-[9999]"
-                style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.6)" }}
-              >
-                <button
-                  onClick={() => setIosTooltip(false)}
-                  className="absolute top-1 right-1 !min-h-0 p-1 opacity-40 hover:opacity-80"
-                  aria-label="Close"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-                <div className="text-eyebrow text-[var(--color-paper)] mb-1.5">ADD TO HOME SCREEN</div>
-                <div className="text-meta opacity-50 leading-relaxed">
-                  Tap <span className="opacity-90">⎙ Share</span> then <span className="opacity-90">Add to Home Screen</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </nav>
   );
@@ -381,7 +377,13 @@ function Shell() {
   return (
     <>
       <div id="shell-header" className="fixed top-0 left-0 right-0 z-50">
-        <TickerBand adminActive={adminActive} onAdminTap={onAdminTap} />
+        <TickerBand
+          adminActive={adminActive}
+          onAdminTap={onAdminTap}
+          installable={isInstallableAndroid}
+          isIOS={isIOS && !isStandalone}
+          onInstall={handleInstall}
+        />
         <Header onWordmarkTap={onWordmarkTap} />
         <LiveCrawlBanner />
       </div>
@@ -408,17 +410,14 @@ function Shell() {
 
       {!isFullScreen && (
         <div className="fixed bottom-0 left-0 right-0 z-50">
-          <BottomNav
-            installable={isInstallableAndroid}
-            isIOS={isIOS && !isStandalone}
-            onInstall={handleInstall}
-          />
+          <BottomNav />
         </div>
       )}
 
       <StoutsBubbles active={stoutsMode} />
       {showSentry && <PinSentry onUnlock={onUnlock} onCancel={() => setShowSentry(false)} />}
       <BuildNotification isAdmin={adminActive} />
+      <PWAInstallBanner />
     </>
   );
 }
