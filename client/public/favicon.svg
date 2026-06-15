@@ -1,16 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
-  <!-- Blaze red rounded square -->
-  <rect width="120" height="120" rx="22" fill="#E63E0B"/>
-  <!-- Pint glass body (ink/dark) -->
-  <path d="M34,26 L86,26 L79,94 Q79,100 73,100 L47,100 Q41,100 41,94 Z" fill="#0A0908"/>
-  <!-- Foam head — cream -->
-  <ellipse cx="60" cy="26" rx="26" ry="9" fill="#FBF5E0"/>
-  <!-- Foam bumps on top -->
-  <circle cx="50" cy="23" r="5.5" fill="#FBF5E0"/>
-  <circle cx="62" cy="20" r="7" fill="#FBF5E0"/>
-  <circle cx="73" cy="23" r="5" fill="#FBF5E0"/>
-  <!-- Liquid colour band inside glass -->
-  <path d="M37,44 L83,44 L79,94 Q79,100 73,100 L47,100 Q41,100 41,94 Z" fill="#C4732A" opacity="0.3"/>
-  <!-- Glass highlight -->
-  <line x1="45" y1="34" x2="43" y2="88" stroke="#FBF5E0" stroke-width="2.5" opacity="0.15" stroke-linecap="round"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_2159_36)">
+<path d="M394.24 0H117.76C52.7229 0 0 52.7229 0 117.76V394.24C0 459.277 52.7229 512 117.76 512H394.24C459.277 512 512 459.277 512 394.24V117.76C512 52.7229 459.277 0 394.24 0Z" fill="#EA4118"/>
+<path d="M256 426.56C256 426.56 384 313.2 384 196.16V122H128V196.16C128 313.2 256 426.56 256 426.56Z" fill="#16100E"/>
+<path d="M256 209C283.614 209 306 186.614 306 159C306 131.386 283.614 109 256 109C228.386 109 206 131.386 206 159C206 186.614 228.386 209 256 209Z" fill="#BC9121"/>
+<path d="M128 121H384V128.5L128 146V121Z" fill="#F3ECDD"/>
+<path d="M161.335 86H256.112V121.84H128C128 102.046 142.925 86 161.335 86Z" fill="#F3ECDD"/>
+<path d="M350.777 86H256V121.84H384.111C384.111 102.046 369.187 86 350.777 86Z" fill="#F3ECDD"/>
+</g>
+<defs>
+<clipPath id="clip0_2159_36">
+<rect width="512" height="512" fill="white"/>
+</clipPath>
+</defs>
 </svg>
