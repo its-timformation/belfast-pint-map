@@ -1,6 +1,6 @@
 {
   "name": "Belfast Pint Map",
-  "short_name": "Pint Map",
+  "short_name": "Belfast Pint Map",
   "description": "Community-driven beer price tracker for Belfast bars",
   "start_url": "/",
   "display": "standalone",
