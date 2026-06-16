@@ -91,9 +91,9 @@ export function isVerifiedStale(verifiedAt: string | null | undefined) {
 }
 
 /* ------------------------------ distance ------------------------------ */
-/** Haversine, returns kilometres. */
+/** Haversine, returns miles. */
 export function distanceKm(a:{lat:number;lng:number}, b:{lat:number;lng:number}) {
-  const R = 6371;
+  const R = 3958.8;
   const dLat = (b.lat - a.lat) * Math.PI / 180;
   const dLng = (b.lng - a.lng) * Math.PI / 180;
   const lat1 = a.lat * Math.PI / 180;

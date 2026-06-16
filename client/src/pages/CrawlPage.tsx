@@ -94,7 +94,7 @@ function persistActiveCrawl(
 ───────────────────────────────────────────────────────────── */
 
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const R = 6371;
+  const R = 3958.8;
   const dLat = (b.lat - a.lat) * Math.PI / 180;
   const dLng = (b.lng - a.lng) * Math.PI / 180;
   const x =
@@ -108,7 +108,7 @@ function crawlStats(stops: Array<{ lat: number; lng: number }>) {
   if (stops.length < 2) return { distanceKm: 0, durationMin: 0 };
   let dist = 0;
   for (let i = 0; i < stops.length - 1; i++) dist += haversineKm(stops[i], stops[i + 1]);
-  return { distanceKm: dist, durationMin: Math.round((dist / 5) * 60) + stops.length * 45 };
+  return { distanceKm: dist, durationMin: Math.round((dist / 3.1) * 60) + stops.length * 45 };
 }
 
 function formatDuration(min: number) {
@@ -576,7 +576,7 @@ export default function CrawlPage() {
             <p className="text-meta opacity-60 mt-2 mb-2">{sharedCrawl.description}</p>
           )}
           <div className="text-eyebrow opacity-50 mt-3 mb-4">
-            {sharedBars.length} STOPS · {ss.distanceKm.toFixed(1)} KM · ~{formatDuration(ss.durationMin)}
+            {sharedBars.length} STOPS · {ss.distanceKm.toFixed(1)} MI · ~{formatDuration(ss.durationMin)}
           </div>
           <MapsButtons stops={sharedBars} />
           <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">ROUTE</div>
@@ -1009,7 +1009,7 @@ export default function CrawlPage() {
             <div className="hairline-b pb-1.5 mb-2 flex items-baseline justify-between">
               <div className="font-display text-base text-[var(--color-paper)]">YOUR STOPS</div>
               <div className="text-eyebrow opacity-40">
-                {stopBars.length} · {stats.distanceKm.toFixed(1)} KM · ~{formatDuration(stats.durationMin)}
+                {stopBars.length} · {stats.distanceKm.toFixed(1)} MI · ~{formatDuration(stats.durationMin)}
               </div>
             </div>
             <ul className="mb-4">
@@ -1101,7 +1101,7 @@ export default function CrawlPage() {
           </h1>
           {draft.description && <p className="text-meta opacity-55 mb-2">{draft.description}</p>}
           <div className="text-eyebrow opacity-45 mb-4">
-            {stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} KM · ~{formatDuration(stats.durationMin)}
+            {stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} MI · ~{formatDuration(stats.durationMin)}
           </div>
           <MapsButtons stops={stopBars} />
           <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">ROUTE</div>
@@ -1354,7 +1354,7 @@ export default function CrawlPage() {
                     {i > activeStopIdx && (
                       <div className="text-meta opacity-45">
                         {i === activeStopIdx + 1
-                          ? `NEXT · ${haversineKm(stopBars[activeStopIdx], bar).toFixed(1)} KM`
+                          ? `NEXT · ${haversineKm(stopBars[activeStopIdx], bar).toFixed(1)} MI`
                           : bar.area?.toUpperCase() ?? ""}
                       </div>
                     )}
@@ -1441,7 +1441,7 @@ export default function CrawlPage() {
           WELL<br /><span className="text-[var(--color-blaze)]">DONE</span>
         </h1>
         <div className="text-eyebrow opacity-45 mb-6">
-          {stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} KM WALKED · ~{formatDuration(stats.durationMin)}
+          {stopBars.length} STOPS · {stats.distanceKm.toFixed(1)} MI WALKED · ~{formatDuration(stats.durationMin)}
         </div>
         <div className="hairline-b pb-1.5 mb-2 font-display text-base text-[var(--color-paper)]">RECAP</div>
         {stopBars.map((b, i) => (
@@ -1521,7 +1521,7 @@ export default function CrawlPage() {
                         {crawl.name}
                       </div>
                       <div className="text-meta opacity-50 mt-0.5">
-                        {barIds.length} STOPS · {cs.distanceKm.toFixed(1)} KM
+                        {barIds.length} STOPS · {cs.distanceKm.toFixed(1)} MI
                         {crawl.authorName ? ` · BY ${crawl.authorName.toUpperCase()}` : ""}
                       </div>
                       {crawl.description && (

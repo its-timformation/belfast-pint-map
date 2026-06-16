@@ -274,7 +274,7 @@ export function GuinnessSheet({ open, onClose, userLocation }: Props) {
                             {openState.open
                               ? `OPEN · UNTIL ${openState.closesAt}`
                               : `CLOSED · OPENS ${openState.opensAt ?? "—"}`}
-                            {" · "}{bar.distance.toFixed(1)} KM
+                            {" · "}{bar.distance.toFixed(1)} MI
                           </span>
                         </div>
                       </div>

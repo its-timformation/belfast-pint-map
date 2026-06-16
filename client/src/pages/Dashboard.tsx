@@ -140,7 +140,7 @@ export default function Dashboard() {
               <div className="font-display text-2xl uppercase leading-none mt-1.5">{editorsPick.name}</div>
               <div className="flex items-end justify-between mt-2">
                 <div className="text-meta opacity-90">
-                  {editorsPick.area?.toUpperCase()} · {editorsPick.distance.toFixed(1)} KM
+                  {editorsPick.area?.toUpperCase()} · {editorsPick.distance.toFixed(1)} MI
                 </div>
                 <div className="font-display text-2xl text-[var(--color-ink)] leading-none">
                   {formatPrice(editorsPick.cheapest!.price, currency)}
@@ -207,7 +207,7 @@ export default function Dashboard() {
                       <span className={`inline-block w-1.5 h-1.5 rounded-full ${bar.openState.open ? "bg-[var(--color-verified)]" : "bg-[var(--color-paper)] opacity-35"}`} />
                       {bar.openState.open
                         ? `OPEN UNTIL ${bar.openState.closesAt}`
-                        : `CLOSED · OPENS ${bar.openState.opensAt ?? "—"}`} · {bar.distance.toFixed(1)} KM
+                        : `CLOSED · OPENS ${bar.openState.opensAt ?? "—"}`} · {bar.distance.toFixed(1)} MI
                     </div>
                   </div>
                   {bar.cheapest && (
